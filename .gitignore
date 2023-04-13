@@ -127,3 +127,7 @@ dmypy.json
 
 # Pyre type checker
 .pyre/
+
+# Generated Cython
+dist_metrics/_dist_metric.pyx
+dist_metrics/_dist_metric.pxd
