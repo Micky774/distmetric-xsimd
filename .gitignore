@@ -129,5 +129,5 @@ dmypy.json
 .pyre/
 
 # Generated Cython
-dist_metrics/_dist_metric.pyx
-dist_metrics/_dist_metric.pxd
+dist_metrics/_dist_metrics.pyx
+dist_metrics/_dist_metrics.pxd
