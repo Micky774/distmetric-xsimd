@@ -129,6 +129,11 @@ dmypy.json
 .pyre/
 
 # Generated files
+*.c
+*.cpp
 */_dist_metrics.pyx
 */_dist_metrics.pxd
-*/_dist_metrics.c
+
+# Except those specifically marked in src
+!*/src/*.c
+!*/src/*.cpp
