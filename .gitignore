@@ -137,3 +137,5 @@ dmypy.json
 # Except those specifically marked in src
 !*/src/*.c
 !*/src/*.cpp
+
+.vscode/

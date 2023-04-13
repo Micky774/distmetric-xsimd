@@ -40,6 +40,10 @@ from sklearn.utils.fixes import parse_version, sp_base_version
 cdef inline double fmax(double a, double b) noexcept nogil:
     return max(a, b)
 
+cdef extern from "src/_dist_optim.c":
+    cdef bint HAS_SIMD
+    cdef float64_t simd_manhattan(float64_t * x, float64_t * y, intp_t t) nogil
+    cdef float32_t simd_manhattan32(float32_t * x, float32_t * y, intp_t t) nogil
 
 ######################################################################
 # newObj function
@@ -1110,9 +1114,13 @@ cdef class ManhattanDistance{{name_suffix}}(DistanceMetric{{name_suffix}}):
         intp_t size,
     ) except -1 nogil:
         cdef float64_t d = 0
-        cdef intp_t j
-        for j in range(size):
-            d += fabs(x1[j] - x2[j])
+        cdef intp_t j, simd_width = 16 / sizeof({{INPUT_DTYPE_t}})
+        cdef intp_t remainder = size % simd_width
+        if HAS_SIMD:
+            d = <float64_t> simd_manhattan{{name_suffix}}(x1, x2, size)
+        else:
+            for j in range(size):
+                d += fabs(x1[j] - x2[j])
         return d
 
     cdef inline float64_t dist_csr(
