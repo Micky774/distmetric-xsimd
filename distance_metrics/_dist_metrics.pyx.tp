@@ -65,7 +65,7 @@ cdef class ManhattanDistance{{name_suffix}}(DistanceMetric{{name_suffix}}):
         cdef intp_t j, simd_width = 16 / sizeof({{INPUT_DTYPE_t}})
         cdef intp_t remainder = size % simd_width
         if HAS_SIMD:
-            d = <float64_t> simd_manhattan{{name_suffix}}(x1, x2, size)
+            d = <float64_t> xsimd_manhattan[{{INPUT_DTYPE_t}}](x1, x2, size)
         else:
             for j in range(size):
                 d += fabs(x1[j] - x2[j])
