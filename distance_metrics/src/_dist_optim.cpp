@@ -2,18 +2,10 @@
     #define HAS_SIMD 1
     #include <cstddef>
     #include <vector>
+    #include "abs.hpp"
     #include "xsimd/xsimd.hpp"
 
     namespace xs = xsimd;
-
-    struct xsimd_abs {
-        template <class Batch, class Arch, typename Type>
-        Batch operator()(Arch, const Batch& x){
-            using batch_type = xs::batch<Type, Arch>;
-            batch_type mask = batch_type::broadcast(-0.f);
-            return xs::bitwise_andnot(mask, x);
-        }
-    };
 
     struct xsimd_manhattan {
         template <class Arr, class Arch, typename Type>
@@ -27,17 +19,19 @@
             // size for which the vectorization is possible
             std::size_t vec_size = size - size % loop_iter;
 
+            auto disp_abs = xs::dispatch<xs::arch_list<xs::avx2, xs::sse3>>(xsimd_abs{});
+            
             batch_type sum_1 = batch_type::broadcast(0);
             batch_type sum_2 = batch_type::broadcast(0);
             for(std::size_t idx = 0; idx < vec_size; idx += loop_iter)
             {
                 batch_type simd_x_1 = batch_type::load(&a[idx]);
                 batch_type simd_y_1 = batch_type::load(&b[idx]);
-                sum_1 += xsimd_abs{}(simd_x_1 - simd_y_1);
+                sum_1 += disp_abs(simd_x_1 - simd_y_1);
 
                 batch_type simd_x_2 = batch_type::load(&a[idx + inc]);
                 batch_type simd_y_2 = batch_type::load(&b[idx + inc]);
-                sum_2 += xsimd_abs{}(simd_x_2 - simd_y_2);
+                sum_2 += disp_abs(simd_x_2 - simd_y_2);
             }
             // xs::store(&res[idx], rvec);
             sum_1 += sum_2;
