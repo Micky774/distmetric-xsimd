@@ -61,11 +61,7 @@ cdef class ManhattanDistance{{name_suffix}}(DistanceMetric{{name_suffix}}):
         const {{INPUT_DTYPE_t}}* x2,
         intp_t size,
     ) except -1 nogil:
-        cdef float64_t d = 0
-        cdef intp_t j, simd_width = 16 / sizeof({{INPUT_DTYPE_t}})
-        cdef intp_t remainder = size % simd_width
-        d = xsimd_manhattan_dist[{{INPUT_DTYPE_t}}](x1, x2, size)
-        return d
+        return xsimd_manhattan_dist[{{INPUT_DTYPE_t}}](x1, x2, size)
 
     cdef inline float64_t dist_csr(
         self,
@@ -135,18 +131,6 @@ cdef class EuclideanDistance{{name_suffix}}(DistanceMetric{{name_suffix}}):
         intp_t size,
     ) except -1 nogil:
         return xsimd_euclidean_rdist[{{INPUT_DTYPE_t}}](x1, x2, size)
-
-    cdef inline float64_t _rdist_to_dist(self, {{INPUT_DTYPE_t}} rdist) except -1 nogil:
-        return sqrt(rdist)
-
-    cdef inline float64_t _dist_to_rdist(self, {{INPUT_DTYPE_t}} dist) except -1 nogil:
-        return dist * dist
-
-    def rdist_to_dist(self, rdist):
-        return np.sqrt(rdist)
-
-    def dist_to_rdist(self, dist):
-        return dist ** 2
 
     cdef inline float64_t rdist_csr(
         self,
