@@ -7,8 +7,8 @@
 
     namespace xs = xsimd;
 
-    struct xsimd_manhattan {
-        template <class Arr, class Arch, typename Type>
+    template <class Arr, class Arch, typename Type>
+    struct _xsimd_manhattan {
         Type operator()(Arch, const Arr& a, const Arr& b)
         {
             using batch_type = xs::batch<Type, Arch>;
@@ -46,6 +46,8 @@
         }
     };
 
+    // TODO: Dispatch properly w/ templates
+    auto xsimd_manhattan = xs::dispatch<xs::arch_list<xs::avx2, xs::sse3>>(xsimd_abs<>{});
 
     typedef __m128d simd_float64_t;
     typedef __m128 simd_float32_t;
