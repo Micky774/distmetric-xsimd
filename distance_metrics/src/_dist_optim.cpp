@@ -70,11 +70,7 @@
         using batch_type = xs::batch<Type, xs::best_arch>;
         // instantiate functor
         auto xsimd_abs = _xsimd_abs();
-        UNROLL_2(EUCLIDEAN_SETUP)
-        VECTOR_LOOP( \
-            UNROLL_2(EUCLIDEAN_BODY),
-            batch_type
-        )
+        MAKE_STD_VEC_LOOP(EUCLIDEAN_SETUP, EUCLIDEAN_BODY, batch_type)
         sum_0 += sum_1;
         batch_type batch_sum = xs::reduce_add(sum_0);
         float scalar_sum = *(float*)&batch_sum;
