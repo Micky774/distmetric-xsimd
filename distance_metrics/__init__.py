@@ -1,6 +1,8 @@
-from ._dist_metrics import ManhattanDistance, ManhattanDistance32
+from ._dist_metrics import *
 
 __all__ = [
     "ManhattanDistance",
     "ManhattanDistance32",
+    "EuclideanDistance",
+    "EuclideanDistance32"
 ]

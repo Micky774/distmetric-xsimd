@@ -64,11 +64,7 @@ cdef class ManhattanDistance{{name_suffix}}(DistanceMetric{{name_suffix}}):
         cdef float64_t d = 0
         cdef intp_t j, simd_width = 16 / sizeof({{INPUT_DTYPE_t}})
         cdef intp_t remainder = size % simd_width
-        if HAS_SIMD:
-            d = <float64_t> xsimd_manhattan[{{INPUT_DTYPE_t}}](x1, x2, size)
-        else:
-            for j in range(size):
-                d += fabs(x1[j] - x2[j])
+        d = xsimd_manhattan_dist[{{INPUT_DTYPE_t}}](x1, x2, size)
         return d
 
     cdef inline float64_t dist_csr(
@@ -116,4 +112,92 @@ cdef class ManhattanDistance{{name_suffix}}(DistanceMetric{{name_suffix}}):
                 i1 = i1 + 1
 
         return d
+
+cdef class EuclideanDistance{{name_suffix}}(DistanceMetric{{name_suffix}}):
+    r"""Euclidean Distance metric
+
+    .. math::
+       D(x, y) = \sqrt{ \sum_i (x_i - y_i) ^ 2 }
+    """
+    def __init__(self):
+        self.p = 2
+
+    cdef inline float64_t dist(self,
+        const {{INPUT_DTYPE_t}}* x1,
+        const {{INPUT_DTYPE_t}}* x2,
+        intp_t size,
+    ) except -1 nogil:
+        return sqrt(xsimd_euclidean_rdist[{{INPUT_DTYPE_t}}](x1, x2, size))
+
+    cdef inline float64_t rdist(self,
+        const {{INPUT_DTYPE_t}}* x1,
+        const {{INPUT_DTYPE_t}}* x2,
+        intp_t size,
+    ) except -1 nogil:
+        return xsimd_euclidean_rdist[{{INPUT_DTYPE_t}}](x1, x2, size)
+
+    cdef inline float64_t _rdist_to_dist(self, {{INPUT_DTYPE_t}} rdist) except -1 nogil:
+        return sqrt(rdist)
+
+    cdef inline float64_t _dist_to_rdist(self, {{INPUT_DTYPE_t}} dist) except -1 nogil:
+        return dist * dist
+
+    def rdist_to_dist(self, rdist):
+        return np.sqrt(rdist)
+
+    def dist_to_rdist(self, dist):
+        return dist ** 2
+
+    cdef inline float64_t rdist_csr(
+        self,
+        const {{INPUT_DTYPE_t}}* x1_data,
+        const int32_t[:] x1_indices,
+        const {{INPUT_DTYPE_t}}* x2_data,
+        const int32_t[:] x2_indices,
+        const int32_t x1_start,
+        const int32_t x1_end,
+        const int32_t x2_start,
+        const int32_t x2_end,
+        const intp_t size,
+    ) except -1 nogil:
+
+        cdef:
+            intp_t ix1, ix2
+            intp_t i1 = x1_start
+            intp_t i2 = x2_start
+
+            float64_t d = 0.0
+            float64_t unsquared = 0
+
+        while i1 < x1_end and i2 < x2_end:
+            ix1 = x1_indices[i1]
+            ix2 = x2_indices[i2]
+
+            if ix1 == ix2:
+                unsquared = x1_data[i1] - x2_data[i2]
+                d = d + (unsquared * unsquared)
+                i1 = i1 + 1
+                i2 = i2 + 1
+            elif ix1 < ix2:
+                unsquared = x1_data[i1]
+                d = d + (unsquared * unsquared)
+                i1 = i1 + 1
+            else:
+                unsquared = x2_data[i2]
+                d = d + (unsquared * unsquared)
+                i2 = i2 + 1
+
+        if i1 == x1_end:
+            while i2 < x2_end:
+                unsquared = x2_data[i2]
+                d = d + (unsquared * unsquared)
+                i2 = i2 + 1
+        else:
+            while i1 < x1_end:
+                unsquared = x1_data[i1]
+                d = d + (unsquared * unsquared)
+                i1 = i1 + 1
+
+        return d
+
 {{endfor}}
