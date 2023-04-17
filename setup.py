@@ -118,6 +118,7 @@ extension_config = {
         {
             "sources": ["_dist_metrics.pyx.tp", "_dist_metrics.pxd.tp"],
             "include_np": True,
+            "language":"c++",
         },
     ],
 }

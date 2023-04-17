@@ -1,6 +1,57 @@
 #ifdef __SSE3__
     #define HAS_SIMD 1
-    #include <x86intrin.h>
+    #include <cstddef>
+    #include <vector>
+    #include "xsimd/xsimd.hpp"
+
+    namespace xs = xsimd;
+
+    struct xsimd_abs {
+        template <class Batch, class Arch, typename Type>
+        Batch operator()(Arch, const Batch& x){
+            using batch_type = xs::batch<Type, Arch>;
+            batch_type mask = batch_type::broadcast(-0.f);
+            return xs::bitwise_andnot(mask, x);
+        }
+    };
+
+    struct xsimd_manhattan {
+        template <class Arr, class Arch, typename Type>
+        Type operator()(Arch, const Arr& a, const Arr& b)
+        {
+            using batch_type = xs::batch<Type, Arch>;
+            std::size_t inc = batch_type::size;
+            // Multiply inc by two for unrolling
+            std::size_t loop_iter = inc * 2;
+            std::size_t size = a.size();
+            // size for which the vectorization is possible
+            std::size_t vec_size = size - size % loop_iter;
+
+            batch_type sum_1 = batch_type::broadcast(0);
+            batch_type sum_2 = batch_type::broadcast(0);
+            for(std::size_t idx = 0; idx < vec_size; idx += loop_iter)
+            {
+                batch_type simd_x_1 = batch_type::load(&a[idx]);
+                batch_type simd_y_1 = batch_type::load(&b[idx]);
+                sum_1 += xsimd_abs{}(simd_x_1 - simd_y_1);
+
+                batch_type simd_x_2 = batch_type::load(&a[idx + inc]);
+                batch_type simd_y_2 = batch_type::load(&b[idx + inc]);
+                sum_2 += xsimd_abs{}(simd_x_2 - simd_y_2);
+            }
+            // xs::store(&res[idx], rvec);
+            sum_1 += sum_2;
+            batch_type batch_sum = xs::reduce_add(sum_1);
+            float scalar_sum = *(float*)&batch_sum;
+            // Remaining part that cannot be vectorize
+            for(std::size_t idx = vec_size; idx < size; ++idx)
+            {
+                scalar_sum += fabs(a[idx] - b[idx]);
+            }
+            return scalar_sum;
+        }
+    };
+
 
     typedef __m128d simd_float64_t;
     typedef __m128 simd_float32_t;
