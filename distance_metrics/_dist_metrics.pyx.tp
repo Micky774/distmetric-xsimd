@@ -123,7 +123,7 @@ cdef class EuclideanDistance{{name_suffix}}(DistanceMetric{{name_suffix}}):
         const {{INPUT_DTYPE_t}}* x2,
         intp_t size,
     ) except -1 nogil:
-        return sqrt(xsimd_euclidean_rdist[{{INPUT_DTYPE_t}}](x1, x2, size))
+        return self._rdist_to_dist(xsimd_euclidean_rdist[{{INPUT_DTYPE_t}}](x1, x2, size))
 
     cdef inline float64_t rdist(self,
         const {{INPUT_DTYPE_t}}* x1,
@@ -183,5 +183,8 @@ cdef class EuclideanDistance{{name_suffix}}(DistanceMetric{{name_suffix}}):
                 i1 = i1 + 1
 
         return d
+
+    cdef float64_t _rdist_to_dist(self, {{INPUT_DTYPE_t}} rdist) except -1 nogil:
+        return sqrt(rdist)
 
 {{endfor}}
