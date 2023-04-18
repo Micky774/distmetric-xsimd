@@ -11,9 +11,9 @@
         body \
     } \
 
-#define UNROLL_2(UNROLL_CB) \
-    UNROLL_CB(0) \
-    UNROLL_CB(1) \
+#define UNROLL_2(UNROLL_BODY) \
+    UNROLL_BODY(0) \
+    UNROLL_BODY(1) \
 
 #define MAKE_STD_VEC_LOOP(SETUP, BODY, batch_type) \
     UNROLL_2(MANHATTAN_SETUP) \
@@ -31,6 +31,7 @@
 
     namespace xs = xsimd;
 
+    /*************************************************************************/
     #define MANHATTAN_BODY(ITER) \
         batch_type simd_x_##ITER = batch_type::load(&a[idx + inc * ITER], xs::unaligned_mode{}); \
         batch_type simd_y_##ITER = batch_type::load(&b[idx + inc * ITER], xs::unaligned_mode{}); \
@@ -55,15 +56,16 @@
         return scalar_sum;
     }
 
+    /*************************************************************************/
     #define EUCLIDEAN_BODY(ITER) \
         batch_type simd_x_##ITER = batch_type::load(&a[idx + inc * ITER], xs::unaligned_mode{}); \
         batch_type simd_y_##ITER = batch_type::load(&b[idx + inc * ITER], xs::unaligned_mode{}); \
-        inter_##ITER = simd_x_##ITER - simd_y_##ITER; \
-        sum_##ITER += inter_##ITER * inter_##ITER; \
+        diff_##ITER = simd_x_##ITER - simd_y_##ITER; \
+        sum_##ITER += diff_##ITER * diff_##ITER; \
 
     #define EUCLIDEAN_SETUP(ITER) \
         batch_type sum_##ITER = batch_type::broadcast(0); \
-        batch_type inter_##ITER = batch_type::broadcast(0); \
+        batch_type diff_##ITER = batch_type::broadcast(0); \
 
     template <typename Type>
     Type xsimd_euclidean_rdist(const Type* a, const Type* b, const std::size_t size){
@@ -79,6 +81,7 @@
         REMAINDER_LOOP(scalar_sum += (a[idx] - b[idx]) * (a[idx] - b[idx]);)
         return scalar_sum;
     }
+    /*************************************************************************/
 
 #else
     #define HAS_SIMD 0
