@@ -18,7 +18,6 @@ from sklearn.externals._packaging.version import parse as parse_version  # noqa
 
 import traceback
 import importlib
-import builtins
 
 VERSION = 0.1
 SRC_NAME = "distance_metrics"

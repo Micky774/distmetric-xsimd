@@ -1,6 +1,6 @@
-#define VECTOR_LOOP(body, batch_type) \
+#define VECTOR_LOOP(body, batch_type, n_unroll) \
     std::size_t inc = batch_type::size; \
-    std::size_t loop_iter = inc * 2; \
+    std::size_t loop_iter = inc * n_unroll; \
     std::size_t vec_size = size - size % loop_iter; \
     for(std::size_t idx = 0; idx < vec_size; idx += loop_iter) { \
         body \
@@ -19,7 +19,8 @@
     UNROLL_2(MANHATTAN_SETUP) \
     VECTOR_LOOP( \
         UNROLL_2(MANHATTAN_BODY), \
-        batch_type \
+        batch_type, \
+        2 \
     ) \
 
 
@@ -30,6 +31,7 @@
     #include "abs.hpp"
 
     namespace xs = xsimd;
+    using chosen_arch = xs::sse3;
 
     /*************************************************************************/
     #define MANHATTAN_BODY(ITER) \
@@ -42,7 +44,7 @@
 
     template <typename Type>
     Type xsimd_manhattan_dist(const Type* a, const Type* b, const std::size_t size){
-        using batch_type = xs::batch<Type, xs::best_arch>;
+        using batch_type = xs::batch<Type, chosen_arch>;
         // instantiate functor
         auto xsimd_abs = _xsimd_abs();
         MAKE_STD_VEC_LOOP(MANHATTAN_SETUP, MANHATTAN_BODY, batch_type)
@@ -69,10 +71,11 @@
 
     template <typename Type>
     Type xsimd_euclidean_rdist(const Type* a, const Type* b, const std::size_t size){
-        using batch_type = xs::batch<Type, xs::best_arch>;
+        using batch_type = xs::batch<Type, chosen_arch>;
         // instantiate functor
         auto xsimd_abs = _xsimd_abs();
         MAKE_STD_VEC_LOOP(EUCLIDEAN_SETUP, EUCLIDEAN_BODY, batch_type)
+
         sum_0 += sum_1;
         batch_type batch_sum = xs::reduce_add(sum_0);
         float scalar_sum = *(float*)&batch_sum;
@@ -88,8 +91,8 @@
     #include <cstddef>
 
     template <typename Type>
-    Type xsimd_manhattan_dist(const Type* a, const Type* b, const std::size_t size){return -1}
+    Type xsimd_manhattan_dist(const Type* a, const Type* b, const std::size_t size){return -1;}
     template <typename Type>
-    Type xsimd_euclidean_rdist(const Type* a, const Type* b, const std::size_t size){return -1}
+    Type xsimd_euclidean_rdist(const Type* a, const Type* b, const std::size_t size){return -1;}
 
 #endif
