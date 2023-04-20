@@ -43,10 +43,44 @@ cdef inline double fmax(double a, double b) noexcept nogil:
 {{for name_suffix, INPUT_DTYPE_t, INPUT_DTYPE in implementation_specific_values}}
 from sklearn.metrics._dist_metrics cimport DistanceMetric{{name_suffix}}
 
+METRIC_MAPPING{{name_suffix}} = {
+    'euclidean': EuclideanDistance{{name_suffix}},
+    'l2': EuclideanDistance{{name_suffix}},
+    'manhattan': ManhattanDistance{{name_suffix}},
+    'cityblock': ManhattanDistance{{name_suffix}},
+    'l1': ManhattanDistance{{name_suffix}},
+}
+
+
+cdef class SimdDistanceMetric{{name_suffix}}(DistanceMetric{{name_suffix}}):
+
+    @classmethod
+    def get_metric(x, metric, **kwargs):
+        """Get the given distance metric from the string identifier.
+
+        See the docstring of DistanceMetric for a list of available metrics.
+
+        Parameters
+        ----------
+        metric : str or class name
+            The distance metric to use
+        **kwargs
+            additional arguments will be passed to the requested metric
+        """
+        # Map the metric string ID to the metric class
+        if isinstance(metric, type) and issubclass(metric, DistanceMetric{{name_suffix}}):
+            pass
+        else:
+            try:
+                metric = METRIC_MAPPING{{name_suffix}}[metric]
+            except:
+                raise ValueError("Unrecognized metric '%s'" % metric)
+        return metric(**kwargs)
+
 #------------------------------------------------------------
 # Manhattan Distance
 #  d = sum(abs(x_i - y_i))
-cdef class ManhattanDistance{{name_suffix}}(DistanceMetric{{name_suffix}}):
+cdef class ManhattanDistance{{name_suffix}}(SimdDistanceMetric{{name_suffix}}):
     r"""Manhattan/City-block Distance metric
 
     .. math::
@@ -109,7 +143,7 @@ cdef class ManhattanDistance{{name_suffix}}(DistanceMetric{{name_suffix}}):
 
         return d
 
-cdef class EuclideanDistance{{name_suffix}}(DistanceMetric{{name_suffix}}):
+cdef class EuclideanDistance{{name_suffix}}(SimdDistanceMetric{{name_suffix}}):
     r"""Euclidean Distance metric
 
     .. math::

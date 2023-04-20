@@ -28,10 +28,3 @@ cdef extern from "src/_dist_optim.cpp":
     cdef bint HAS_SIMD
     cdef Type xsimd_manhattan_dist[Type](Type * x, Type * y, intp_t size) nogil
     cdef Type xsimd_euclidean_rdist[Type](Type * x, Type * y, intp_t size) nogil
-
-{{for name_suffix, INPUT_DTYPE_t, INPUT_DTYPE in implementation_specific_values}}
-from sklearn.metrics._dist_metrics cimport DistanceMetric{{name_suffix}}
-
-cdef class EuclideanDistance{{name_suffix}}(DistanceMetric{{name_suffix}}):
-    pass
-{{endfor}}
