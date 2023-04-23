@@ -1,6 +1,5 @@
 from ._dist_metrics import *
 
 __all__ = [
-    "SimdDistanceMetric",
-    "SimdDistanceMetric32"
+    "get_distance_metric"
 ]

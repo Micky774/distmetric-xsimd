@@ -40,6 +40,10 @@ from sklearn.utils.fixes import parse_version, sp_base_version
 cdef inline double fmax(double a, double b) noexcept nogil:
     return max(a, b)
 
+def get_distance_metric(x, metric, **kwargs):
+    dst = SimdDistanceMetric if x.dtype == np.float64 else SimdDistanceMetric32
+    return dst.get_metric(metric, **kwargs)
+
 {{for name_suffix, INPUT_DTYPE_t, INPUT_DTYPE in implementation_specific_values}}
 from sklearn.metrics._dist_metrics cimport DistanceMetric{{name_suffix}}
 
@@ -51,11 +55,10 @@ METRIC_MAPPING{{name_suffix}} = {
     'l1': ManhattanDistance{{name_suffix}},
 }
 
-
 cdef class SimdDistanceMetric{{name_suffix}}(DistanceMetric{{name_suffix}}):
 
     @classmethod
-    def get_metric(x, metric, **kwargs):
+    def get_metric(cls, metric, **kwargs):
         """Get the given distance metric from the string identifier.
 
         See the docstring of DistanceMetric for a list of available metrics.
@@ -143,6 +146,9 @@ cdef class ManhattanDistance{{name_suffix}}(SimdDistanceMetric{{name_suffix}}):
 
         return d
 
+#------------------------------------------------------------
+# Euclidean Distance
+#  d = sqrt(sum(x_i^2 - y_i^2))
 cdef class EuclideanDistance{{name_suffix}}(SimdDistanceMetric{{name_suffix}}):
     r"""Euclidean Distance metric
 
@@ -166,7 +172,19 @@ cdef class EuclideanDistance{{name_suffix}}(SimdDistanceMetric{{name_suffix}}):
     ) except -1 nogil:
         return xsimd_euclidean_rdist[{{INPUT_DTYPE_t}}](x1, x2, size)
 
-    cdef inline float64_t rdist_csr(
+    cdef float64_t _rdist_to_dist(self, {{INPUT_DTYPE_t}} rdist) except -1 nogil:
+        return sqrt(rdist)
+
+    cdef inline float64_t _dist_to_rdist(self, {{INPUT_DTYPE_t}} dist) except -1 nogil:
+        return dist * dist
+
+    def rdist_to_dist(self, rdist):
+        return np.sqrt(rdist)
+
+    def dist_to_rdist(self, dist):
+        return dist ** 2
+
+    cdef float64_t rdist_csr(
         self,
         const {{INPUT_DTYPE_t}}* x1_data,
         const int32_t[:] x1_indices,
@@ -218,7 +236,29 @@ cdef class EuclideanDistance{{name_suffix}}(SimdDistanceMetric{{name_suffix}}):
 
         return d
 
-    cdef float64_t _rdist_to_dist(self, {{INPUT_DTYPE_t}} rdist) except -1 nogil:
-        return sqrt(rdist)
+    cdef inline float64_t dist_csr(
+        self,
+        const {{INPUT_DTYPE_t}}* x1_data,
+        const int32_t[:] x1_indices,
+        const {{INPUT_DTYPE_t}}* x2_data,
+        const int32_t[:] x2_indices,
+        const int32_t x1_start,
+        const int32_t x1_end,
+        const int32_t x2_start,
+        const int32_t x2_end,
+        const intp_t size,
+    ) except -1 nogil:
+        return sqrt(
+            self.rdist_csr(
+            x1_data,
+            x1_indices,
+            x2_data,
+            x2_indices,
+            x1_start,
+            x1_end,
+            x2_start,
+            x2_end,
+            size,
+        ))
 
 {{endfor}}
