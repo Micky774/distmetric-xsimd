@@ -39,58 +39,23 @@
         batch_type simd_x_##ITER = batch_type::load(&a[idx + inc * ITER], xs::unaligned_mode{}); \
         batch_type simd_y_##ITER = batch_type::load(&b[idx + inc * ITER], xs::unaligned_mode{}); \
         sum_##ITER += xs::fabs(simd_x_##ITER - simd_y_##ITER);
-    
+
     #define MANHATTAN_SETUP(ITER) \
         batch_type sum_##ITER = batch_type((Type) 0.);
-
 
     template <typename Type>
     Type xsimd_manhattan_dist(const Type* a, const Type* b, const std::size_t size){
         using batch_type = xs::batch<Type, chosen_arch>;
-        std::size_t inc = batch_type::size;
-        std::size_t loop_iter = inc * 2;
-        std::size_t vec_size = size - size % loop_iter;
-
-        batch_type sum_0 = batch_type((Type) 0.);
-        batch_type sum_1 = batch_type((Type) 0.);
-
-        for(std::size_t idx = 0; idx < vec_size; idx += loop_iter) {
-            batch_type simd_x_0 = batch_type::load(&a[idx], xs::unaligned_mode{});
-            batch_type simd_y_0 = batch_type::load(&b[idx], xs::unaligned_mode{});
-            sum_0 += xs::fabs(simd_x_0 - simd_y_0);
-
-            batch_type simd_x_1 = batch_type::load(&a[idx + inc], xs::unaligned_mode{});
-            batch_type simd_y_1 = batch_type::load(&b[idx + inc], xs::unaligned_mode{});
-            sum_1 += xs::fabs(simd_x_1 - simd_y_1);
-
-            // std::cout << simd_x_0 - simd_y_0 << '\n';
-            // std::cout << xs::fabs(simd_x_0 - simd_y_0) << '\n';
-            // std::cout << sum_0 << sum_1 << '\n';
-            // std::cout << '\n';
-        }
-        sum_0 += sum_1;
-        batch_type batch_sum = xs::reduce_add(sum_0);
-        Type scalar_sum = *(Type*)&batch_sum;
-
-        for(std::size_t idx = vec_size; idx < size; ++idx) {
-            scalar_sum += fabs(a[idx] - b[idx]);
-        }
-        return scalar_sum;
-    }
-
-    template <typename Type>
-    Type _xsimd_manhattan_dist(const Type* a, const Type* b, const std::size_t size){
-        using batch_type = xs::batch<Type, chosen_arch>;
-        // instantiate functor
         MAKE_STD_VEC_LOOP(MANHATTAN_SETUP, MANHATTAN_BODY, batch_type)
 
+        // Reduction
         sum_0 += sum_1;
         batch_type batch_sum = xs::reduce_add(sum_0);
-        Type scalar_sum = *(Type*)&batch_sum;
+        double scalar_sum = *(Type*)&batch_sum;
 
         // Remaining part that cannot be vectorize
         REMAINDER_LOOP(scalar_sum += fabs(a[idx] - b[idx]);)
-        return scalar_sum;
+        return (float) scalar_sum;
     }
 
     /*************************************************************************/
@@ -109,6 +74,7 @@
         using batch_type = xs::batch<Type, chosen_arch>;
         MAKE_STD_VEC_LOOP(EUCLIDEAN_SETUP, EUCLIDEAN_BODY, batch_type)
 
+        // Reduction
         sum_0 += sum_1;
         batch_type batch_sum = xs::reduce_add(sum_0);
         Type scalar_sum = *(Type*)&batch_sum;

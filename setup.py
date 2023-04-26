@@ -29,6 +29,7 @@ MAINTAINER = "Meekail Zain"
 MAINTAINER_EMAIL = "zainmeekail@gmail.com"
 LICENSE = "new BSD"
 
+
 # Custom clean command to remove build artifacts
 class CleanCommand(Command):
     description = "Remove build artifacts from the source tree"
@@ -70,7 +71,6 @@ class CleanCommand(Command):
                     shutil.rmtree(os.path.join(dirpath, dirname))
 
 
-
 cmdclass = {
     "clean": CleanCommand,
     "build_ext": build_ext,
@@ -98,7 +98,6 @@ def check_package_status(package, min_version):
 
     req_str = "distmetric-xsimd requires {} >= {}.\n".format(package, min_version)
 
-
     if package_status["up_to_date"] is False:
         if package_status["version"]:
             raise ImportError(
@@ -107,9 +106,7 @@ def check_package_status(package, min_version):
                 )
             )
         else:
-            raise ImportError(
-                "{} is not installed.\n{}".format(package, req_str)
-            )
+            raise ImportError("{} is not installed.\n{}".format(package, req_str))
 
 
 extension_config = {
@@ -117,7 +114,7 @@ extension_config = {
         {
             "sources": ["_dist_metrics.pyx.tp", "_dist_metrics.pxd.tp"],
             "include_np": True,
-            "language":"c++",
+            "language": "c++",
         },
     ],
 }
