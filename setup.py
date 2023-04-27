@@ -112,9 +112,16 @@ def check_package_status(package, min_version):
 extension_config = {
     SRC_NAME: [
         {
-            "sources": ["_dist_metrics.pyx.tp", "_dist_metrics.pxd.tp"],
+            "sources": [
+                "_dist_metrics.pyx.tp",
+                "_dist_metrics.pxd.tp",
+                "src/_dist_optim.cpp",
+                "src/manhattan_sse2.cpp",
+                "src/manhattan_sse3.cpp",
+            ],
             "include_np": True,
             "language": "c++",
+            "include_dirs": ["src/"],
         },
     ],
 }
