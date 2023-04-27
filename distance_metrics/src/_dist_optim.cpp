@@ -29,7 +29,6 @@
     #include <iostream>
     #include <cstddef>
     #include "xsimd/xsimd.hpp"
-    #include "abs.hpp"
 
     namespace xs = xsimd;
     using chosen_arch = xs::sse3;
