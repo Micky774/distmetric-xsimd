@@ -1,31 +1,29 @@
-#define VECTOR_LOOP(body, batch_type, n_unroll) \
-    std::size_t inc = batch_type::size; \
-    std::size_t loop_iter = inc * n_unroll; \
-    std::size_t vec_size = size - size % loop_iter; \
-    for(std::size_t idx = 0; idx < vec_size; idx += loop_iter) { \
-        body \
-    }
-
-#define REMAINDER_LOOP(body) \
-    for(std::size_t idx = vec_size; idx < size; ++idx) { \
-        body \
-    }
-
-#define UNROLL_2(UNROLL_BODY) \
-    UNROLL_BODY(0) \
-    UNROLL_BODY(1)
-
-#define MAKE_STD_VEC_LOOP(SETUP, BODY, batch_type) \
-    UNROLL_2(SETUP) \
-    VECTOR_LOOP( \
-        UNROLL_2(BODY), \
-        batch_type, \
-        2 \
-    )
-
-
 #ifdef __SSE3__
-    #define HAS_SIMD 1
+    #define VECTOR_LOOP(body, batch_type, n_unroll) \
+        std::size_t inc = batch_type::size; \
+        std::size_t loop_iter = inc * n_unroll; \
+        std::size_t vec_size = size - size % loop_iter; \
+        for(std::size_t idx = 0; idx < vec_size; idx += loop_iter) { \
+            body \
+        }
+
+    #define REMAINDER_LOOP(body) \
+        for(std::size_t idx = vec_size; idx < size; ++idx) { \
+            body \
+        }
+
+    #define UNROLL_2(UNROLL_BODY) \
+        UNROLL_BODY(0) \
+        UNROLL_BODY(1)
+
+    #define MAKE_STD_VEC_LOOP(SETUP, BODY, batch_type) \
+        UNROLL_2(SETUP) \
+        VECTOR_LOOP( \
+            UNROLL_2(BODY), \
+            batch_type, \
+            2 \
+        )
+
     #include <iostream>
     #include <cstddef>
     #include "xsimd/xsimd.hpp"
@@ -85,7 +83,6 @@
     /*************************************************************************/
 
 #else
-    #define HAS_SIMD 0
     #include <cstddef>
 
     template <typename Type>
