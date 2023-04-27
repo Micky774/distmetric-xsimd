@@ -1,130 +1,125 @@
 #ifdef __SSE3__
-    #define HAS_SIMD 1
+    #define VECTOR_LOOP(body, batch_type, n_unroll) \
+        std::size_t inc = batch_type::size; \
+        std::size_t loop_iter = inc * n_unroll; \
+        std::size_t vec_size = size - size % loop_iter; \
+        for(std::size_t idx = 0; idx < vec_size; idx += loop_iter) { \
+            body \
+        }
+
+    #define REMAINDER_LOOP(body) \
+        for(std::size_t idx = vec_size; idx < size; ++idx) { \
+            body \
+        }
+
+    #define UNROLL_2(UNROLL_BODY) \
+        UNROLL_BODY(0) \
+        UNROLL_BODY(1)
+
+    #define MAKE_STD_VEC_LOOP(SETUP, BODY, batch_type) \
+        UNROLL_2(SETUP) \
+        VECTOR_LOOP( \
+            UNROLL_2(BODY), \
+            batch_type, \
+            2 \
+        )
+
+    #include <iostream>
     #include <cstddef>
-    #include <vector>
-    #include "abs.hpp"
     #include "xsimd/xsimd.hpp"
 
     namespace xs = xsimd;
+    using chosen_arch = xs::sse3;
+
+
+
+    /*************************************************************************/
+    #define MANHATTAN_BODY(ITER) \
+        batch_type simd_x_##ITER = batch_type::load(&a[idx + inc * ITER], xs::unaligned_mode{}); \
+        batch_type simd_y_##ITER = batch_type::load(&b[idx + inc * ITER], xs::unaligned_mode{}); \
+        sum_##ITER += disp_abs(simd_x_##ITER - simd_y_##ITER);
+
+    #define MANHATTAN_SETUP(ITER) \
+        batch_type sum_##ITER = batch_type((Type) 0.);
 
     template <class Arr, class Arch, typename Type>
     struct _xsimd_manhattan {
         Type operator()(Arch, const Arr& a, const Arr& b)
         {
-            using batch_type = xs::batch<Type, Arch>;
-            std::size_t inc = batch_type::size;
-            // Multiply inc by two for unrolling
-            std::size_t loop_iter = inc * 2;
-            std::size_t size = a.size();
-            // size for which the vectorization is possible
-            std::size_t vec_size = size - size % loop_iter;
+        using batch_type = xs::batch<Type, chosen_arch>;
+        auto disp_abs = xs::dispatch<xs::arch_list<xs::avx2, xs::sse3>>(xsimd_abs{});
+        MAKE_STD_VEC_LOOP(MANHATTAN_SETUP, MANHATTAN_BODY, batch_type)
 
-            auto disp_abs = xs::dispatch<xs::arch_list<xs::avx2, xs::sse3>>(xsimd_abs{});
-            
-            batch_type sum_1 = batch_type::broadcast(0);
-            batch_type sum_2 = batch_type::broadcast(0);
-            for(std::size_t idx = 0; idx < vec_size; idx += loop_iter)
-            {
-                batch_type simd_x_1 = batch_type::load(&a[idx]);
-                batch_type simd_y_1 = batch_type::load(&b[idx]);
-                sum_1 += disp_abs(simd_x_1 - simd_y_1);
+        // Reduction
+        sum_0 += sum_1;
+        batch_type batch_sum = xs::reduce_add(sum_0);
+        double scalar_sum = *(Type*)&batch_sum;
 
-                batch_type simd_x_2 = batch_type::load(&a[idx + inc]);
-                batch_type simd_y_2 = batch_type::load(&b[idx + inc]);
-                sum_2 += disp_abs(simd_x_2 - simd_y_2);
-            }
-            // xs::store(&res[idx], rvec);
-            sum_1 += sum_2;
-            batch_type batch_sum = xs::reduce_add(sum_1);
-            float scalar_sum = *(float*)&batch_sum;
-            // Remaining part that cannot be vectorize
-            for(std::size_t idx = vec_size; idx < size; ++idx)
-            {
-                scalar_sum += fabs(a[idx] - b[idx]);
-            }
-            return scalar_sum;
-        }
+        // Remaining part that cannot be vectorize
+        REMAINDER_LOOP(scalar_sum += fabs(a[idx] - b[idx]);)
+        return (float) scalar_sum;
     };
 
     // TODO: Dispatch properly w/ templates
-    auto xsimd_manhattan = xs::dispatch<xs::arch_list<xs::avx2, xs::sse3>>(xsimd_abs<>{});
+    auto dispatched_xsimd_manhattan_dist = xs::dispatch<xs::arch_list<xs::avx2, xs::sse3>>(xsimd_abs<>{});
 
-    typedef __m128d simd_float64_t;
-    typedef __m128 simd_float32_t;
+    /*************************************************************************/
+    #define MANHATTAN_BODY(ITER) \
+        batch_type simd_x_##ITER = batch_type::load(&a[idx + inc * ITER], xs::unaligned_mode{}); \
+        batch_type simd_y_##ITER = batch_type::load(&b[idx + inc * ITER], xs::unaligned_mode{}); \
+        sum_##ITER += xs::fabs(simd_x_##ITER - simd_y_##ITER);
 
-    inline simd_float32_t abs_ps(simd_float32_t x) {
-        const simd_float32_t sign_mask = _mm_set1_ps(-0.f); // -0.f = 1 << 31
-        return _mm_andnot_ps(sign_mask, x);
+    #define MANHATTAN_SETUP(ITER) \
+        batch_type sum_##ITER = batch_type((Type) 0.);
+
+    template <typename Type>
+    Type xsimd_manhattan_dist(const Type* a, const Type* b, const std::size_t size){
+        using batch_type = xs::batch<Type, chosen_arch>;
+        MAKE_STD_VEC_LOOP(MANHATTAN_SETUP, MANHATTAN_BODY, batch_type)
+
+        // Reduction
+        sum_0 += sum_1;
+        batch_type batch_sum = xs::reduce_add(sum_0);
+        double scalar_sum = *(Type*)&batch_sum;
+
+        // Remaining part that cannot be vectorize
+        REMAINDER_LOOP(scalar_sum += fabs(a[idx] - b[idx]);)
+        return (float) scalar_sum;
     }
 
-    inline simd_float64_t abs_pd(simd_float64_t x) {
-        const simd_float64_t sign_mask = _mm_set1_pd(-0.f); // -0.f = 1 << 63
-        return _mm_andnot_pd(sign_mask, x);
+    /*************************************************************************/
+    #define EUCLIDEAN_BODY(ITER) \
+        batch_type simd_x_##ITER = batch_type::load(&a[idx + inc * ITER], xs::unaligned_mode{}); \
+        batch_type simd_y_##ITER = batch_type::load(&b[idx + inc * ITER], xs::unaligned_mode{}); \
+        diff_##ITER = simd_x_##ITER - simd_y_##ITER; \
+        sum_##ITER += diff_##ITER * diff_##ITER;
+
+    #define EUCLIDEAN_SETUP(ITER) \
+        batch_type sum_##ITER = batch_type::broadcast(0); \
+        batch_type diff_##ITER = batch_type::broadcast(0);
+
+    template <typename Type>
+    Type xsimd_euclidean_rdist(const Type* a, const Type* b, const std::size_t size){
+        using batch_type = xs::batch<Type, chosen_arch>;
+        MAKE_STD_VEC_LOOP(EUCLIDEAN_SETUP, EUCLIDEAN_BODY, batch_type)
+
+        // Reduction
+        sum_0 += sum_1;
+        batch_type batch_sum = xs::reduce_add(sum_0);
+        Type scalar_sum = *(Type*)&batch_sum;
+
+        // Remaining part that cannot be vectorize
+        REMAINDER_LOOP(scalar_sum += (a[idx] - b[idx]) * (a[idx] - b[idx]);)
+        return scalar_sum;
     }
+    /*************************************************************************/
 
-    float simd_manhattan32(const float* x, const float* y, ssize_t t) {
-        simd_float32_t simd_x_1, simd_x_2;
-        simd_float32_t simd_y_1, simd_y_2;
-        ssize_t loop_width = 8; // Two SIMD registers can hold eight floats
-        ssize_t remainder = t % loop_width;
-        ssize_t n_iter = t - remainder;
-        ssize_t idx;
-
-        simd_float32_t sum_1 = _mm_setzero_ps();
-        simd_float32_t sum_2 = _mm_setzero_ps();
-        for(idx = 0; idx < n_iter; idx += loop_width) {
-            simd_x_1 = _mm_set_ps(x[idx], x[idx + 1], x[idx + 2], x[idx + 3]);
-            simd_y_1 = _mm_set_ps(y[idx], y[idx + 1], y[idx + 2], y[idx + 3]);
-            sum_1 += abs_ps(simd_x_1 - simd_y_1);
-
-            simd_x_2 = _mm_set_ps(x[idx + 4], x[idx + 5], x[idx + 6], x[idx + 7]);
-            simd_y_2 = _mm_set_ps(y[idx + 4], y[idx + 5], y[idx + 6], y[idx + 7]);
-            sum_2 += abs_ps(simd_x_2 - simd_y_2);
-        }
-
-        sum_1 += sum_2;
-        simd_float32_t hsum = _mm_hadd_ps(sum_1, sum_1);
-        hsum = _mm_hadd_ps(hsum, hsum);
-        float output_sum = *(float*)&hsum;
-        for(idx = n_iter; idx < t; idx++){
-            output_sum += fabs(x[idx] - y[idx]);
-        }
-
-        return output_sum;
-    }
-
-    double simd_manhattan(const double* x, const double* y, ssize_t t) {
-        simd_float64_t simd_x_1, simd_x_2;
-        simd_float64_t simd_y_1, simd_y_2;
-        ssize_t loop_width = 4; // Two SIMD registers can hold four doubles
-        ssize_t remainder = t % loop_width;
-        ssize_t n_iter = t - remainder;
-        ssize_t idx;
-
-        simd_float64_t sum_1 = _mm_setzero_pd();
-        simd_float64_t sum_2 = _mm_setzero_pd();
-        for(idx = 0; idx < n_iter; idx += loop_width) {
-            simd_x_1 = _mm_set_pd(x[idx], x[idx + 1]);
-            simd_y_1 = _mm_set_pd(y[idx], y[idx + 1]);
-            sum_1 += abs_pd(simd_x_1 - simd_y_1);
-
-            simd_x_2 = _mm_set_pd(x[idx + 2], x[idx + 3]);
-            simd_y_2 = _mm_set_pd(y[idx + 2], y[idx + 3]);
-            sum_2 += abs_pd(simd_x_2 - simd_y_2);
-        }
-        sum_1 += sum_2;
-        simd_float64_t hsum = _mm_hadd_pd(sum_1, sum_1);
-        double output_sum = *(double*)&hsum;
-        for(idx = n_iter; idx < t; idx++){
-            output_sum += fabs(x[idx] - y[idx]);
-        }
-
-        return output_sum;
-    }
 #else
-    #define HAS_SIMD 0
-    #include <sys/types.h>
+    #include <cstddef>
 
-    double simd_manhattan(double* x, double* y, ssize_t t) {return -1.f;}
-    float simd_manhattan32(float* x, float* y, ssize_t t) {return -1.;}
+    template <typename Type>
+    Type xsimd_manhattan_dist(const Type* a, const Type* b, const std::size_t size){return -1;}
+    template <typename Type>
+    Type xsimd_euclidean_rdist(const Type* a, const Type* b, const std::size_t size){return -1;}
+
 #endif
