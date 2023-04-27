@@ -63,11 +63,11 @@
         batch_type simd_x_##ITER = batch_type::load(&a[idx + inc * ITER], xs::unaligned_mode{}); \
         batch_type simd_y_##ITER = batch_type::load(&b[idx + inc * ITER], xs::unaligned_mode{}); \
         diff_##ITER = simd_x_##ITER - simd_y_##ITER; \
-        sum_##ITER += diff_##ITER * diff_##ITER; \
+        sum_##ITER += diff_##ITER * diff_##ITER;
 
     #define EUCLIDEAN_SETUP(ITER) \
         batch_type sum_##ITER = batch_type::broadcast(0); \
-        batch_type diff_##ITER = batch_type::broadcast(0); \
+        batch_type diff_##ITER = batch_type::broadcast(0);
 
     template <typename Type>
     Type xsimd_euclidean_rdist(const Type* a, const Type* b, const std::size_t size){
