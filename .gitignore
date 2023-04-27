@@ -127,3 +127,15 @@ dmypy.json
 
 # Pyre type checker
 .pyre/
+
+# Generated files
+*.c
+*.cpp
+*/_dist_metrics.pyx
+*/_dist_metrics.pxd
+
+# Except those specifically marked in src
+!*/src/*.c
+!*/src/*.cpp
+
+.vscode/

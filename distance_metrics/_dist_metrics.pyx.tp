@@ -1,0 +1,264 @@
+{{py:
+
+implementation_specific_values = [
+    # Values are the following ones:
+    #
+    #       name_suffix, INPUT_DTYPE_t, INPUT_DTYPE
+    #
+    # On the first hand, an empty string is used for `name_suffix`
+    # for the float64 case as to still be able to expose the original
+    # float64 implementation under the same API, namely `DistanceMetric`.
+    #
+    # On the other hand, '32' bit is used for `name_suffix` for the float32
+    # case to remove ambiguity and use `DistanceMetric32`, which is not
+    # publicly exposed.
+    #
+    # The metric mapping is adapted accordingly to route to the correct
+    # implementations.
+    #
+    ('', 'float64_t', 'np.float64'),
+    ('32', 'float32_t', 'np.float32')
+]
+
+}}
+# By Jake Vanderplas (2013) <jakevdp@cs.washington.edu>
+# written for the scikit-learn project
+# License: BSD
+
+import numpy as np
+cimport numpy as cnp
+
+cnp.import_array()  # required in order to use C-API
+
+from libc.math cimport fabs, sqrt, exp, pow, cos, sin, asin
+
+from scipy.sparse import csr_matrix, issparse
+from sklearn.utils._typedefs cimport float64_t, float32_t, int32_t, intp_t
+from sklearn.utils import check_array
+from sklearn.utils.fixes import parse_version, sp_base_version
+
+cdef inline double fmax(double a, double b) noexcept nogil:
+    return max(a, b)
+
+def get_distance_metric(x, metric, **kwargs):
+    dst = SimdDistanceMetric if x.dtype == np.float64 else SimdDistanceMetric32
+    return dst.get_metric(metric, **kwargs)
+
+{{for name_suffix, INPUT_DTYPE_t, INPUT_DTYPE in implementation_specific_values}}
+from sklearn.metrics._dist_metrics cimport DistanceMetric{{name_suffix}}
+
+METRIC_MAPPING{{name_suffix}} = {
+    'euclidean': EuclideanDistance{{name_suffix}},
+    'l2': EuclideanDistance{{name_suffix}},
+    'manhattan': ManhattanDistance{{name_suffix}},
+    'cityblock': ManhattanDistance{{name_suffix}},
+    'l1': ManhattanDistance{{name_suffix}},
+}
+
+cdef class SimdDistanceMetric{{name_suffix}}(DistanceMetric{{name_suffix}}):
+
+    @classmethod
+    def get_metric(cls, metric, **kwargs):
+        """Get the given distance metric from the string identifier.
+
+        See the docstring of DistanceMetric for a list of available metrics.
+
+        Parameters
+        ----------
+        metric : str or class name
+            The distance metric to use
+        **kwargs
+            additional arguments will be passed to the requested metric
+        """
+        # Map the metric string ID to the metric class
+        if isinstance(metric, type) and issubclass(metric, DistanceMetric{{name_suffix}}):
+            pass
+        else:
+            try:
+                metric = METRIC_MAPPING{{name_suffix}}[metric]
+            except:
+                raise ValueError("Unrecognized metric '%s'" % metric)
+        return metric(**kwargs)
+
+#------------------------------------------------------------
+# Manhattan Distance
+#  d = sum(abs(x_i - y_i))
+cdef class ManhattanDistance{{name_suffix}}(SimdDistanceMetric{{name_suffix}}):
+    r"""Manhattan/City-block Distance metric
+
+    .. math::
+       D(x, y) = \sum_i |x_i - y_i|
+    """
+    def __init__(self):
+        self.p = 1
+
+    cdef inline float64_t dist(
+        self,
+        const {{INPUT_DTYPE_t}}* x1,
+        const {{INPUT_DTYPE_t}}* x2,
+        intp_t size,
+    ) except -1 nogil:
+        return xsimd_manhattan_dist[{{INPUT_DTYPE_t}}](x1, x2, size)
+
+    cdef inline float64_t dist_csr(
+        self,
+        const {{INPUT_DTYPE_t}}* x1_data,
+        const int32_t[:] x1_indices,
+        const {{INPUT_DTYPE_t}}* x2_data,
+        const int32_t[:] x2_indices,
+        const int32_t x1_start,
+        const int32_t x1_end,
+        const int32_t x2_start,
+        const int32_t x2_end,
+        const intp_t size,
+    ) except -1 nogil:
+
+        cdef:
+            intp_t ix1, ix2
+            intp_t i1 = x1_start
+            intp_t i2 = x2_start
+
+            float64_t d = 0.0
+
+        while i1 < x1_end and i2 < x2_end:
+            ix1 = x1_indices[i1]
+            ix2 = x2_indices[i2]
+
+            if ix1 == ix2:
+                d = d + fabs(x1_data[i1] - x2_data[i2])
+                i1 = i1 + 1
+                i2 = i2 + 1
+            elif ix1 < ix2:
+                d = d + fabs(x1_data[i1])
+                i1 = i1 + 1
+            else:
+                d = d + fabs(x2_data[i2])
+                i2 = i2 + 1
+
+        if i1 == x1_end:
+            while i2 < x2_end:
+                d = d + fabs(x2_data[i2])
+                i2 = i2 + 1
+        else:
+            while i1 < x1_end:
+                d = d + fabs(x1_data[i1])
+                i1 = i1 + 1
+
+        return d
+
+#------------------------------------------------------------
+# Euclidean Distance
+#  d = sqrt(sum(x_i^2 - y_i^2))
+cdef class EuclideanDistance{{name_suffix}}(SimdDistanceMetric{{name_suffix}}):
+    r"""Euclidean Distance metric
+
+    .. math::
+       D(x, y) = \sqrt{ \sum_i (x_i - y_i) ^ 2 }
+    """
+    def __init__(self):
+        self.p = 2
+
+    cdef inline float64_t dist(self,
+        const {{INPUT_DTYPE_t}}* x1,
+        const {{INPUT_DTYPE_t}}* x2,
+        intp_t size,
+    ) except -1 nogil:
+        return self._rdist_to_dist(xsimd_euclidean_rdist[{{INPUT_DTYPE_t}}](x1, x2, size))
+
+    cdef inline float64_t rdist(self,
+        const {{INPUT_DTYPE_t}}* x1,
+        const {{INPUT_DTYPE_t}}* x2,
+        intp_t size,
+    ) except -1 nogil:
+        return xsimd_euclidean_rdist[{{INPUT_DTYPE_t}}](x1, x2, size)
+
+    cdef float64_t _rdist_to_dist(self, {{INPUT_DTYPE_t}} rdist) except -1 nogil:
+        return sqrt(rdist)
+
+    cdef inline float64_t _dist_to_rdist(self, {{INPUT_DTYPE_t}} dist) except -1 nogil:
+        return dist * dist
+
+    def rdist_to_dist(self, rdist):
+        return np.sqrt(rdist)
+
+    def dist_to_rdist(self, dist):
+        return dist ** 2
+
+    cdef float64_t rdist_csr(
+        self,
+        const {{INPUT_DTYPE_t}}* x1_data,
+        const int32_t[:] x1_indices,
+        const {{INPUT_DTYPE_t}}* x2_data,
+        const int32_t[:] x2_indices,
+        const int32_t x1_start,
+        const int32_t x1_end,
+        const int32_t x2_start,
+        const int32_t x2_end,
+        const intp_t size,
+    ) except -1 nogil:
+
+        cdef:
+            intp_t ix1, ix2
+            intp_t i1 = x1_start
+            intp_t i2 = x2_start
+
+            float64_t d = 0.0
+            float64_t unsquared = 0
+
+        while i1 < x1_end and i2 < x2_end:
+            ix1 = x1_indices[i1]
+            ix2 = x2_indices[i2]
+
+            if ix1 == ix2:
+                unsquared = x1_data[i1] - x2_data[i2]
+                d = d + (unsquared * unsquared)
+                i1 = i1 + 1
+                i2 = i2 + 1
+            elif ix1 < ix2:
+                unsquared = x1_data[i1]
+                d = d + (unsquared * unsquared)
+                i1 = i1 + 1
+            else:
+                unsquared = x2_data[i2]
+                d = d + (unsquared * unsquared)
+                i2 = i2 + 1
+
+        if i1 == x1_end:
+            while i2 < x2_end:
+                unsquared = x2_data[i2]
+                d = d + (unsquared * unsquared)
+                i2 = i2 + 1
+        else:
+            while i1 < x1_end:
+                unsquared = x1_data[i1]
+                d = d + (unsquared * unsquared)
+                i1 = i1 + 1
+
+        return d
+
+    cdef inline float64_t dist_csr(
+        self,
+        const {{INPUT_DTYPE_t}}* x1_data,
+        const int32_t[:] x1_indices,
+        const {{INPUT_DTYPE_t}}* x2_data,
+        const int32_t[:] x2_indices,
+        const int32_t x1_start,
+        const int32_t x1_end,
+        const int32_t x2_start,
+        const int32_t x2_end,
+        const intp_t size,
+    ) except -1 nogil:
+        return sqrt(
+            self.rdist_csr(
+            x1_data,
+            x1_indices,
+            x2_data,
+            x2_indices,
+            x1_start,
+            x1_end,
+            x2_start,
+            x2_end,
+            size,
+        ))
+
+{{endfor}}
