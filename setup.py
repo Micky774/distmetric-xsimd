@@ -9,9 +9,11 @@ import os
 from os.path import join
 import platform
 import shutil
+import glob
+import subprocess
 
 from setuptools import Command, Extension, setup
-from setuptools.command.build_ext import build_ext
+from setuptools.command.build_ext import build_ext as _build_ext
 from sklearn import _min_dependencies as min_deps  # noqa
 from sklearn._build_utils import _check_cython_version  # noqa
 from sklearn.externals._packaging.version import parse as parse_version  # noqa
@@ -28,6 +30,14 @@ with open("README.rst") as f:
 MAINTAINER = "Meekail Zain"
 MAINTAINER_EMAIL = "zainmeekail@gmail.com"
 LICENSE = "new BSD"
+PATH_TO_GENERATOR = "distance_metrics/_generate.py"
+GENERATED_DIR = "distance_metrics/src/generated/"
+
+
+class build_ext(_build_ext):
+    def run(self):
+        """Build extensions in build directory, then copy if --inplace"""
+        _build_ext.run(self)
 
 
 # Custom clean command to remove build artifacts
@@ -67,7 +77,7 @@ class CleanCommand(Command):
                         os.unlink(os.path.join(dirpath, root))
 
             for dirname in dirnames:
-                if dirname == "__pycache__":
+                if dirname in ("__pycache__", "generated"):
                     shutil.rmtree(os.path.join(dirpath, dirname))
 
 
@@ -109,15 +119,29 @@ def check_package_status(package, min_version):
             raise ImportError("{} is not installed.\n{}".format(package, req_str))
 
 
-extension_config = {
-    SRC_NAME: [
-        {
-            "sources": ["_dist_metrics.pyx.tp", "_dist_metrics.pxd.tp"],
-            "include_np": True,
-            "language": "c++",
-        },
-    ],
-}
+def build_extension_config():
+    # TODO: Filter to only delete unsupported architectures and files that have
+    # had theor corresponding *.def files altered.
+    if os.path.exists(GENERATED_DIR):
+        shutil.rmtree(GENERATED_DIR)
+    # Generate simd compilation targets from *.def files
+    subprocess.run([sys.executable, PATH_TO_GENERATOR])
+    srcs = ["_dist_metrics.pyx.tp", "_dist_metrics.pxd.tp", "src/_dist_optim.cpp"]
+    srcs += [
+        "/".join(GENERATED_DIR.split("/")[1:]) + os.path.basename(p)
+        for p in glob.glob("distance_metrics/src/generated/*.cpp")
+    ]
+    extension_config = {
+        SRC_NAME: [
+            {
+                "sources": srcs,
+                "include_np": True,
+                "language": "c++",
+                "include_dirs": ["src/"],
+            },
+        ],
+    }
+    return extension_config
 
 
 def configure_extension_modules():
@@ -146,7 +170,7 @@ def configure_extension_modules():
     else:
         default_libraries = []
 
-    default_extra_compile_args = []
+    default_extra_compile_args = ["-march=native"]
     build_with_debug_symbols = (
         os.environ.get("SKLEARN_BUILD_ENABLE_DEBUG_SYMBOLS", "0") != "0"
     )
@@ -158,6 +182,7 @@ def configure_extension_modules():
             default_extra_compile_args.append("-g0")
 
     cython_exts = []
+    extension_config = build_extension_config()
     for submodule, extensions in extension_config.items():
         submodule_parts = submodule.split(".")
         parent_dir = join(*submodule_parts)
