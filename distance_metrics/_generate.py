@@ -19,7 +19,7 @@ def pprint_config(config):
 
 
 def get_config():
-    definitions = glob.glob(join(DEFINITIONS_DIR, r"/*.def"))
+    definitions = glob.glob(join(DEFINITIONS_DIR, r"*.def"))
     config = {}
     for def_file_name in definitions:
         mode = None
@@ -83,8 +83,16 @@ def gen_from_config(config):
         """  # noqa
     )
 
-    ARCHITECTURES = ["sse2", "sse3"]
-    # ARCHITECTURES = ["sse2", "sse3", "ssse3", "sse4_1", "sse4_2", "avx", "avx2"]
+    ARCHITECTURES = [
+        "sse2",
+        "sse3",
+        # "ssse3",
+        # "sse4_1",
+        # "sse4_2",
+        "avx",
+        # "avx2",
+        # "neon64",
+    ]
     target_specific_templates = {}
     for arch in ARCHITECTURES:
         target_specific_templates[arch] = """#include "{0}.hpp"\n"""
@@ -105,13 +113,11 @@ def gen_from_config(config):
             indent(spec["REMAINDER"], PY_TAB),
         )
         file_path = join(SIMD_PATH, join(GENERATED_DIR, f"{metric}.hpp"))
-        print(f"\n\n{file_path}\n{'':=^100}\n\n{file_content}")
         with open(file_path, "w") as file:
             file.write(file_content)
 
         for arch in ARCHITECTURES:
             file_path = join(SIMD_PATH, join(GENERATED_DIR, f"{metric}_{arch}.cpp"))
-            # print(f"\n\n{file_path}\n{'':=^100}\n\n{target_specific_templates[arch].format(metric)}")
             with open(file_path, "w") as file:
                 file.write(target_specific_templates[arch].format(metric))
 
@@ -120,6 +126,11 @@ def generate_code():
     print("Generating simd targets...\n")
     config = get_config()
     gen_from_config(config)
+
+
+def clean_generated_code():
+    files = glob.glob(join(GENERATED_DIR, "*"))
+    print(files)
 
 
 if __name__ == "__main__":

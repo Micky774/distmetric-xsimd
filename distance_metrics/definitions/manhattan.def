@@ -1,5 +1,5 @@
 SETUP
-batch_type sum_##ITER = batch_type((Type) 0.);
+batch_type sum_##ITER = batch_type::broadcast((Type) 0.);
 
 BODY
 batch_type simd_x_##ITER = batch_type::load(&a[idx + inc * ITER], xs::unaligned_mode{}); \

@@ -5,8 +5,8 @@ diff_##ITER = simd_x_##ITER - simd_y_##ITER; \
 sum_##ITER += diff_##ITER * diff_##ITER;
 
 SETUP
-batch_type sum_##ITER = batch_type(0.); \
-batch_type diff_##ITER = batch_type(0.);
+batch_type sum_##ITER = batch_type::broadcast(0.); \
+batch_type diff_##ITER = batch_type::broadcast(0.);
 
 REMAINDER
 // Reduction

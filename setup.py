@@ -31,6 +31,7 @@ MAINTAINER = "Meekail Zain"
 MAINTAINER_EMAIL = "zainmeekail@gmail.com"
 LICENSE = "new BSD"
 PATH_TO_GENERATOR = "distance_metrics/_generate.py"
+GENERATED_DIR = "generated"
 
 
 # Custom clean command to remove build artifacts
@@ -70,7 +71,7 @@ class CleanCommand(Command):
                         os.unlink(os.path.join(dirpath, root))
 
             for dirname in dirnames:
-                if dirname == "__pycache__":
+                if dirname in ("__pycache__", "generated"):
                     shutil.rmtree(os.path.join(dirpath, dirname))
 
 
