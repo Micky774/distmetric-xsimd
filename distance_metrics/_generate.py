@@ -2,10 +2,11 @@ import os
 import glob
 from textwrap import dedent, indent
 from os.path import join
+from pathlib import Path
 
 PY_TAB = "    "
-GENERATED_DIR = "generated"
-DEFINITIONS_DIR = "distance_metrics/definitions"
+GENERATED_DIR = "distance_metrics/src/generated/"
+DEFINITIONS_DIR = "distance_metrics/definitions/"
 
 
 def pprint_config(config):
@@ -42,7 +43,6 @@ def get_config():
 
 
 def gen_from_config(config):
-    SIMD_PATH = "distance_metrics/src"
     file_template = dedent(
         """\
         #ifndef {1}_HPP
@@ -89,7 +89,7 @@ def gen_from_config(config):
         # "ssse3",
         # "sse4_1",
         # "sse4_2",
-        "avx",
+        # "avx",
         # "avx2",
         # "neon64",
     ]
@@ -112,25 +112,21 @@ def gen_from_config(config):
             indent(spec["BODY"], PY_TAB),
             indent(spec["REMAINDER"], PY_TAB),
         )
-        file_path = join(SIMD_PATH, join(GENERATED_DIR, f"{metric}.hpp"))
+        file_path = join(GENERATED_DIR, f"{metric}.hpp")
         with open(file_path, "w") as file:
             file.write(file_content)
 
         for arch in ARCHITECTURES:
-            file_path = join(SIMD_PATH, join(GENERATED_DIR, f"{metric}_{arch}.cpp"))
+            file_path = join(GENERATED_DIR, f"{metric}_{arch}.cpp")
             with open(file_path, "w") as file:
                 file.write(target_specific_templates[arch].format(metric))
 
 
 def generate_code():
     print("Generating simd targets...\n")
+    Path(GENERATED_DIR).mkdir(parents=True, exist_ok=True)
     config = get_config()
     gen_from_config(config)
-
-
-def clean_generated_code():
-    files = glob.glob(join(GENERATED_DIR, "*"))
-    print(files)
 
 
 if __name__ == "__main__":
