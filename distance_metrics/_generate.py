@@ -1,12 +1,31 @@
-import os
 import glob
 from textwrap import dedent, indent
-from os.path import join
+from os.path import join, basename
 from pathlib import Path
 
 PY_TAB = "    "
 GENERATED_DIR = "distance_metrics/src/generated/"
 DEFINITIONS_DIR = "distance_metrics/definitions/"
+
+ARCHITECTURES = [
+    "sse2",
+    "sse3",
+    "ssse3",
+    "sse4_1",
+    "sse4_2",
+    "avx",
+    "avx2",
+    "avx512bw",
+    "avx512cd",
+    "avx512dq",
+    "avx512f",
+    "fma3<xs::avx>",
+    "fma3<xs::avx2>",
+    "fma3<xs::sse4_2>",
+    # "fma4",
+    # "neon",
+    # "neon64",
+]
 
 
 def pprint_config(config):
@@ -37,7 +56,7 @@ def get_config():
                 else:
                     section += line + "\n"
             specification[mode] = section
-        function_name = os.path.basename(def_file_name)[:-4]
+        function_name = basename(def_file_name)[:-4]
         config[function_name] = specification
     return config
 
@@ -83,16 +102,6 @@ def gen_from_config(config):
         """  # noqa
     )
 
-    ARCHITECTURES = [
-        "sse2",
-        "sse3",
-        # "ssse3",
-        # "sse4_1",
-        # "sse4_2",
-        # "avx",
-        # "avx2",
-        # "neon64",
-    ]
     target_specific_templates = {}
     for arch in ARCHITECTURES:
         target_specific_templates[arch] = """#include "{0}.hpp"\n"""
