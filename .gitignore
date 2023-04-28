@@ -133,9 +133,10 @@ dmypy.json
 *.cpp
 */_dist_metrics.pyx
 */_dist_metrics.pxd
+distance_metrics/src/generated/*
 
 # Except those specifically marked in src
-!*/src/*.c
-!*/src/*.cpp
+!*/*src/*.c
+!*/*src/*.cpp
 
 .vscode/

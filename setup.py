@@ -9,6 +9,8 @@ import os
 from os.path import join
 import platform
 import shutil
+import glob
+import subprocess
 
 from setuptools import Command, Extension, setup
 from setuptools.command.build_ext import build_ext
@@ -28,6 +30,7 @@ with open("README.rst") as f:
 MAINTAINER = "Meekail Zain"
 MAINTAINER_EMAIL = "zainmeekail@gmail.com"
 LICENSE = "new BSD"
+PATH_TO_GENERATOR = "distance_metrics/_generate.py"
 
 
 # Custom clean command to remove build artifacts
@@ -109,22 +112,26 @@ def check_package_status(package, min_version):
             raise ImportError("{} is not installed.\n{}".format(package, req_str))
 
 
-extension_config = {
-    SRC_NAME: [
-        {
-            "sources": [
-                "_dist_metrics.pyx.tp",
-                "_dist_metrics.pxd.tp",
-                "src/_dist_optim.cpp",
-                "src/manhattan_sse2.cpp",
-                "src/manhattan_sse3.cpp",
-            ],
-            "include_np": True,
-            "language": "c++",
-            "include_dirs": ["src/"],
-        },
-    ],
-}
+def build_extension_config():
+    # Generate simd compilation targets from *.def files
+    subprocess.run([sys.executable, PATH_TO_GENERATOR])
+
+    srcs = ["_dist_metrics.pyx.tp", "_dist_metrics.pxd.tp", "src/_dist_optim.cpp"]
+    srcs += [
+        "src/generated/" + os.path.basename(p)
+        for p in glob.glob("distance_metrics/src/generated/*.cpp")
+    ]
+    extension_config = {
+        SRC_NAME: [
+            {
+                "sources": srcs,
+                "include_np": True,
+                "language": "c++",
+                "include_dirs": ["src/"],
+            },
+        ],
+    }
+    return extension_config
 
 
 def configure_extension_modules():
@@ -165,6 +172,7 @@ def configure_extension_modules():
             default_extra_compile_args.append("-g0")
 
     cython_exts = []
+    extension_config = build_extension_config()
     for submodule, extensions in extension_config.items():
         submodule_parts = submodule.split(".")
         parent_dir = join(*submodule_parts)
