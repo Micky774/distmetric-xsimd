@@ -1,0 +1,51 @@
+[build-system]
+# Minimum requirements for the build system to execute.
+requires = [
+    "setuptools",
+    "wheel",
+    "Cython>=0.29.33",
+    "sklearn~=1.3.0",
+]
+
+[tool.black]
+line-length = 88
+target_version = ['py38', 'py39', 'py310']
+preview = true
+exclude = '''
+/(
+    \.eggs         # exclude a few common directories in the
+  | \.git          # root of the project
+  | \.mypy_cache
+  | \.vscode
+  | build
+  | dist
+  | doc/tutorial
+)/
+'''
+
+[tool.cython-lint]
+# Ignore the same error codes as flake8
+# + E501 (line too long) because keeping it < 88 in cython
+# often makes code less readable.
+ignore = [
+    # check ignored by default in flake8. Meaning unclear.
+    'E24',
+    # space before : (needed for how black formats slicing)
+    'E203',
+    # line too long
+    'E501',
+    # do not assign a lambda expression, use a def
+    'E731',
+    # do not use variables named 'l', 'O', or 'I'
+    'E741',
+    # line break before binary operator
+    'W503',
+    # line break after binary operator
+    'W504',
+]
+# Exclude files are generated from tempita templates
+exclude= '''
+(
+    distance_metrics/_dist_metrics.pyx
+)
+'''

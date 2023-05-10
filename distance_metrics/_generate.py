@@ -62,35 +62,20 @@ def get_config():
 
 
 def gen_from_config(config):
-    file_template = dedent(
-        """\
+    file_template = dedent("""\
         #ifndef {1}_HPP
         #define {1}_HPP
         #include "utils.hpp"
 
-        """
-    )
-    file_template += dedent(
-        """\
         struct _{0}{{
         template <class Arch, typename Type>
         Type operator()(Arch, const Type* a, const Type* b, const std::size_t size);
         }};
 
-
-        """
-    )
-    file_template += dedent(
-        """\
         #define {1}_SETUP(ITER) \\
         {2}
-
         #define {1}_BODY(ITER) \\
         {3}
-        """
-    )
-    file_template += dedent(
-        """\
         template <class Arch, typename Type>
         Type _{0}::operator()(Arch, const Type* a, const Type* b, const std::size_t size){{
             using batch_type = xs::batch<Type, Arch>;
@@ -98,9 +83,7 @@ def gen_from_config(config):
 
         {4}
         }}
-
-        """  # noqa
-    )
+        """)  # noqa
 
     target_specific_templates = {}
     for arch in ARCHITECTURES:

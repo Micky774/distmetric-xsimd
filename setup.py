@@ -10,16 +10,16 @@ from os.path import join
 import platform
 import shutil
 import glob
-import subprocess
 
 from setuptools import Command, Extension, setup
 from setuptools.command.build_ext import build_ext as _build_ext
 from sklearn import _min_dependencies as min_deps  # noqa
 from sklearn._build_utils import _check_cython_version  # noqa
 from sklearn.externals._packaging.version import parse as parse_version  # noqa
-
+from distance_metrics._generate import generate_code
 import traceback
 import importlib
+from collections import defaultdict
 
 VERSION = 0.1
 SRC_NAME = "distance_metrics"
@@ -30,8 +30,42 @@ with open("README.rst") as f:
 MAINTAINER = "Meekail Zain"
 MAINTAINER_EMAIL = "zainmeekail@gmail.com"
 LICENSE = "new BSD"
-PATH_TO_GENERATOR = "distance_metrics/_generate.py"
 GENERATED_DIR = "distance_metrics/src/generated/"
+
+PYTEST_MIN_VERSION = "5.4.3"
+CYTHON_MIN_VERSION = "0.29.33"
+SKLEARN_MIN_VERSION = "1.2"
+
+# 'build' and 'install' is included to have structured metadata for CI.
+# It will NOT be included in setup's extras_require
+# The values are (version_spec, comma separated tags)
+dependent_packages = {
+    "scikit-learn": (SKLEARN_MIN_VERSION, "install"),
+    "cython": (CYTHON_MIN_VERSION, "build"),
+    "matplotlib": ("3.1.3", "docs, examples, tests"),
+    "pandas": ("1.0.5", "benchmark, docs, examples, tests"),
+    "seaborn": ("0.9.0", "docs, examples"),
+    "pytest": (PYTEST_MIN_VERSION, "tests"),
+    "pytest-cov": ("2.9.0", "tests"),
+    "flake8": ("3.8.2", "tests"),
+    "black": ("23.3.0", "tests"),
+    "mypy": ("0.961", "tests"),
+    "sphinx": ("4.0.1", "docs"),
+    "sphinx-gallery": ("0.7.0", "docs"),
+    "numpydoc": ("1.2.0", "docs, tests"),
+    "Pillow": ("7.1.2", "docs"),
+    "plotly": ("5.10.0", "docs, examples"),
+    # XXX: Pin conda-lock to the latest released version (needs manual update
+    # from time to time)
+    "conda-lock": ("1.4.0", "maintenance"),
+}
+
+
+# create inverse mapping for setuptools
+tag_to_packages: dict = defaultdict(list)
+for package, (min_version, extras) in dependent_packages.items():
+    for extra in extras.split(", "):
+        tag_to_packages[extra].append("{}>={}".format(package, min_version))
 
 
 class build_ext(_build_ext):
@@ -106,7 +140,7 @@ def check_package_status(package, min_version):
         package_status["up_to_date"] = False
         package_status["version"] = ""
 
-    req_str = "distmetric-xsimd requires {} >= {}.\n".format(package, min_version)
+    req_str = "SLSDM requires {} >= {}.\n".format(package, min_version)
 
     if package_status["up_to_date"] is False:
         if package_status["version"]:
@@ -125,7 +159,7 @@ def build_extension_config():
     if os.path.exists(GENERATED_DIR):
         shutil.rmtree(GENERATED_DIR)
     # Generate simd compilation targets from *.def files
-    subprocess.run([sys.executable, PATH_TO_GENERATOR])
+    generate_code()
     srcs = ["_dist_metrics.pyx.tp", "_dist_metrics.pxd.tp", "src/_dist_optim.cpp"]
     srcs += [
         "/".join(GENERATED_DIR.split("/")[1:]) + os.path.basename(p)
@@ -170,10 +204,12 @@ def configure_extension_modules():
     else:
         default_libraries = []
 
+    # Necessary to generate necessary SIMD instructions
+    # TODO: Update to explicitly use instructions up-to and including those
+    # provided by the user when building, so as to avoid e.g. unintended
+    # "promotions" of SSE3 instructions to AVX
     default_extra_compile_args = ["-march=native"]
-    build_with_debug_symbols = (
-        os.environ.get("SKLEARN_BUILD_ENABLE_DEBUG_SYMBOLS", "0") != "0"
-    )
+    build_with_debug_symbols = os.environ.get("SLSDM_ENABLE_DEBUG_SYMBOLS", "0") != "0"
     if os.name == "posix":
         if build_with_debug_symbols:
             default_extra_compile_args.append("-g")
@@ -295,11 +331,11 @@ def setup_package():
         ],
         cmdclass=cmdclass,
         python_requires=python_requires,
-        install_requires=min_deps.tag_to_packages["install"],
+        install_requires=tag_to_packages["install"],
         package_data={"": ["*.csv", "*.gz", "*.txt", "*.pxd", "*.rst", "*.jpg"]},
         zip_safe=False,  # the package can run out of an .egg file
         extras_require={
-            key: min_deps.tag_to_packages[key]
+            key: tag_to_packages[key]
             for key in ["examples", "docs", "tests", "benchmark"]
         },
     )
@@ -311,13 +347,12 @@ def setup_package():
         if sys.version_info < required_python_version:
             required_version = "%d.%d" % required_python_version
             raise RuntimeError(
-                "Scikit-learn requires Python %s or later. The current"
+                "SLSDM requires Python %s or later. The current"
                 " Python version is %s installed in %s."
                 % (required_version, platform.python_version(), sys.executable)
             )
 
-        check_package_status("numpy", min_deps.NUMPY_MIN_VERSION)
-        check_package_status("scipy", min_deps.SCIPY_MIN_VERSION)
+        check_package_status("sklearn", SKLEARN_MIN_VERSION)
 
         _check_cython_version()
         metadata["ext_modules"] = configure_extension_modules()
