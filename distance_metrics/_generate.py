@@ -2,12 +2,16 @@ import glob
 from textwrap import dedent, indent
 from os.path import join, basename
 from pathlib import Path
+from ._config import global_config
+
 
 PY_TAB = "    "
 GENERATED_DIR = "distance_metrics/src/generated/"
 DEFINITIONS_DIR = "distance_metrics/definitions/"
 
-ARCHITECTURES = [
+TARGET_ARCH = "fma3<xs::sse4_2>"
+# All SIMD instructions supported by xsimd
+_x86 = [
     "sse2",
     "sse3",
     "ssse3",
@@ -22,15 +26,33 @@ ARCHITECTURES = [
     "fma3<xs::avx>",
     "fma3<xs::avx2>",
     "fma3<xs::sse4_2>",
-    # "fma4",
-    # "neon",
-    # "neon64",
+    "fma4",
+]
+_ARM = [
+    "neon",
+    "neon64",
 ]
 
 
-def pprint_config(config):
+def _make_architectures(target_arch):
+    target_system = None
+    for _ARCH in (_x86, _ARM):
+        try:
+            target_arch_idx = _ARCH.index(target_arch)
+            target_system = _ARCH
+        except ValueError:
+            pass
+    if target_system is None:
+        raise ValueError(
+            f"Unknown target architecture '{target_arch}' provided; please choose from"
+            f" {_x86} for x86 systems, and {_ARM} for ARM systems."
+        )
+    global_config["archs"] = [target_system[idx] for idx in range(target_arch_idx + 1)]
+
+
+def _pprint_config(config):
     for key in config:
-        print(f"DEBUG *** For function {key}:\n")
+        print(f"For function {key}:\n")
         spec = config[key]
         for section in spec:
             print(f"Showing section: {section}:\n")
@@ -61,7 +83,10 @@ def get_config():
     return config
 
 
-def gen_from_config(config):
+def gen_from_config(config, target_arch):
+    _make_architectures(target_arch)
+    print(f"Generating the following SIMD targets: {global_config['archs']}...\n")
+
     file_template = dedent("""\
         #ifndef {1}_HPP
         #define {1}_HPP
@@ -86,7 +111,7 @@ def gen_from_config(config):
         """)  # noqa
 
     target_specific_templates = {}
-    for arch in ARCHITECTURES:
+    for arch in global_config["archs"]:
         target_specific_templates[arch] = """#include "{0}.hpp"\n"""
         file_template += "\n"
         file_template += f"// {arch.upper()}\n"
@@ -108,18 +133,16 @@ def gen_from_config(config):
         with open(file_path, "w") as file:
             file.write(file_content)
 
-        for arch in ARCHITECTURES:
+        for arch in global_config["archs"]:
             file_path = join(GENERATED_DIR, f"{metric}_{arch}.cpp")
             with open(file_path, "w") as file:
                 file.write(target_specific_templates[arch].format(metric))
 
 
-def generate_code():
-    print("Generating simd targets...\n")
+def generate_code(target_arch):
+    # TODO: First check to see whether any source files have been modified and
+    # actually require to be regenerated, or an environment flag specifying
+    # such has been set.
     Path(GENERATED_DIR).mkdir(parents=True, exist_ok=True)
     config = get_config()
-    gen_from_config(config)
-
-
-if __name__ == "__main__":
-    generate_code()
+    gen_from_config(config, target_arch)

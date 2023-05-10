@@ -16,7 +16,7 @@ from setuptools.command.build_ext import build_ext as _build_ext
 from sklearn import _min_dependencies as min_deps  # noqa
 from sklearn._build_utils import _check_cython_version  # noqa
 from sklearn.externals._packaging.version import parse as parse_version  # noqa
-from distance_metrics._generate import generate_code
+from distance_metrics._generate import generate_code, GENERATED_DIR
 import traceback
 import importlib
 from collections import defaultdict
@@ -30,7 +30,6 @@ with open("README.rst") as f:
 MAINTAINER = "Meekail Zain"
 MAINTAINER_EMAIL = "zainmeekail@gmail.com"
 LICENSE = "new BSD"
-GENERATED_DIR = "distance_metrics/src/generated/"
 
 PYTEST_MIN_VERSION = "5.4.3"
 CYTHON_MIN_VERSION = "0.29.33"
@@ -158,8 +157,10 @@ def build_extension_config():
     # had theor corresponding *.def files altered.
     if os.path.exists(GENERATED_DIR):
         shutil.rmtree(GENERATED_DIR)
+
     # Generate simd compilation targets from *.def files
-    generate_code()
+    target_arch = os.environ.get("SLSDM_SIMD_ARCH", "sse3")
+    generate_code(target_arch)
     srcs = ["_dist_metrics.pyx.tp", "_dist_metrics.pxd.tp", "src/_dist_optim.cpp"]
     srcs += [
         "/".join(GENERATED_DIR.split("/")[1:]) + os.path.basename(p)
