@@ -44,7 +44,7 @@ def _make_architectures(target_arch):
             f"Unknown target architecture '{target_arch}' provided; please choose from"
             f" {_x86} for x86 systems, and {_ARM} for ARM systems."
         )
-    return [target_system[idx] for idx in range(target_arch_idx + 1)]
+    return target_system[: target_arch_idx + 1]
 
 
 def _pprint_config(config):
