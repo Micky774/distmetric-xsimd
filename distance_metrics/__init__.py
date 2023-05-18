@@ -1,6 +1,11 @@
-from ._dist_metrics import get_distance_metric
-from ._config import global_config
+def get_distance_metric(X, metric):
+    # A bit of a hack to allow for partial import during build
+    try:
+        from ._dist_metrics import get_distance_metric
 
-ARCHITECTURES = global_config["archs"]
+        return get_distance_metric(X, metric)
+    except ModuleNotFoundError:
+        return None
 
-__all__ = ["get_distance_metric", "ARCHITECTURES"]
+
+__all__ = ["get_distance_metric"]

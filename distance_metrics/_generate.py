@@ -2,14 +2,11 @@ import glob
 from textwrap import dedent, indent
 from os.path import join, basename
 from pathlib import Path
-from ._config import global_config
-
 
 PY_TAB = "    "
 GENERATED_DIR = "distance_metrics/src/generated/"
 DEFINITIONS_DIR = "distance_metrics/definitions/"
 
-TARGET_ARCH = "fma3<xs::sse4_2>"
 # All SIMD instructions supported by xsimd
 _x86 = [
     "sse2",
@@ -47,7 +44,7 @@ def _make_architectures(target_arch):
             f"Unknown target architecture '{target_arch}' provided; please choose from"
             f" {_x86} for x86 systems, and {_ARM} for ARM systems."
         )
-    global_config["archs"] = [target_system[idx] for idx in range(target_arch_idx + 1)]
+    return [target_system[idx] for idx in range(target_arch_idx + 1)]
 
 
 def _pprint_config(config):
@@ -84,8 +81,8 @@ def get_config():
 
 
 def gen_from_config(config, target_arch):
-    _make_architectures(target_arch)
-    print(f"Generating the following SIMD targets: {global_config['archs']}...\n")
+    ARCHITECTURES = _make_architectures(target_arch)
+    print(f"Generating the following SIMD targets: {ARCHITECTURES}...\n")
 
     file_template = dedent("""\
         #ifndef {1}_HPP
@@ -111,7 +108,7 @@ def gen_from_config(config, target_arch):
         """)  # noqa
 
     target_specific_templates = {}
-    for arch in global_config["archs"]:
+    for arch in ARCHITECTURES:
         target_specific_templates[arch] = """#include "{0}.hpp"\n"""
         file_template += "\n"
         file_template += f"// {arch.upper()}\n"
@@ -133,7 +130,7 @@ def gen_from_config(config, target_arch):
         with open(file_path, "w") as file:
             file.write(file_content)
 
-        for arch in global_config["archs"]:
+        for arch in ARCHITECTURES:
             file_path = join(GENERATED_DIR, f"{metric}_{arch}.cpp")
             with open(file_path, "w") as file:
                 file.write(target_specific_templates[arch].format(metric))
@@ -144,5 +141,4 @@ def generate_code(target_arch):
     # actually require to be regenerated, or an environment flag specifying
     # such has been set.
     Path(GENERATED_DIR).mkdir(parents=True, exist_ok=True)
-    config = get_config()
-    gen_from_config(config, target_arch)
+    gen_from_config(get_config(), target_arch)
