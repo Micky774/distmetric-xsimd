@@ -422,11 +422,6 @@ def setup_package():
     )
 
     commands = [arg for arg in sys.argv[1:] if not arg.startswith("-")]
-    print(f"DEBUG *** Commands: {commands}\n\n")
-    need_build = not all(
-        command in ("egg_info", "dist_info", "clean", "check") for command in commands
-    )
-    print(f"{need_build=}")
     if not all(
         command in ("egg_info", "dist_info", "clean", "check") for command in commands
     ):
