@@ -43,4 +43,4 @@ using float_batch_sse2 = xs::batch<float, xs::sse2>;
 using double_batch_sse2 = xs::batch<double, xs::sse2>;
 
 #else
-#endif
+#endif /* UTILS_HPP */

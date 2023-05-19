@@ -195,7 +195,7 @@ def build_extension_config():
     # TODO: Allow for more nuanced subset generation
     target_arch = os.environ.get("SLSDM_SIMD_ARCH", "sse3")
     generate_code(target_arch)
-    srcs = ["_dist_metrics.pyx.tp", "_dist_metrics.pxd.tp", "src/_dist_optim.cpp"]
+    srcs = ["_dist_metrics.pyx.tp", "_dist_metrics.pxd", "src/_dist_optim.cpp"]
     srcs += [
         "/".join(GENERATED_DIR.split("/")[1:]) + os.path.basename(p)
         for p in glob.glob("distance_metrics/src/generated/*.cpp")
@@ -204,7 +204,6 @@ def build_extension_config():
         SRC_NAME: [
             {
                 "sources": srcs,
-                "include_np": True,
                 "language": "c++",
                 "include_dirs": ["src/"],
             },

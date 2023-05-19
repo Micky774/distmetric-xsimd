@@ -7,6 +7,9 @@ PY_TAB = "    "
 GENERATED_DIR = "distance_metrics/src/generated/"
 DEFINITIONS_DIR = "distance_metrics/definitions/"
 
+# XXX: Is there a nicer, more user-friendly approach towards
+# FMA{3, 4} instructions?
+# TODO: Add documentation regarding instruction priorities/ordering
 # All SIMD instructions supported by xsimd
 _x86 = [
     "sse2",
@@ -14,16 +17,16 @@ _x86 = [
     "ssse3",
     "sse4_1",
     "sse4_2",
+    "fma3<xs::sse4_2>",
     "avx",
+    "fma3<xs::avx>",
     "avx2",
-    "avx512bw",
+    "fma3<xs::avx2>",
+    "fma4",
+    "avx512f",
     "avx512cd",
     "avx512dq",
-    "avx512f",
-    "fma3<xs::avx>",
-    "fma3<xs::avx2>",
-    "fma3<xs::sse4_2>",
-    "fma4",
+    "avx512bw",
 ]
 _ARM = [
     "neon",
@@ -31,7 +34,7 @@ _ARM = [
 ]
 
 
-def _make_architectures(target_arch):
+def _get_arch_id(target_arch):
     target_system = None
     for _ARCH in (_x86, _ARM):
         try:
@@ -44,7 +47,42 @@ def _make_architectures(target_arch):
             f"Unknown target architecture '{target_arch}' provided; please choose from"
             f" {_x86} for x86 systems, and {_ARM} for ARM systems."
         )
-    return target_system[: target_arch_idx + 1]
+    return target_arch_idx, target_system
+
+
+def _parse_spec(spec, arch):
+    target_arch_idx, target_system = _get_arch_id(arch)
+    out = set()
+
+    if "<" in spec:
+        fma_version = arch[3] if (len(arch) > 3 and arch[:3] == "fma") else -1
+        for a in target_system[:target_arch_idx]:
+            # Ensure unsupported/mutually-exclusive FMA features are not enabled
+            if "fma" not in a or a[3] == fma_version:
+                out |= {a}
+    if "<=" in spec or not spec:
+        out |= {target_system[target_arch_idx]}
+    if "!" in spec:
+        out -= {target_system[target_arch_idx]}
+    return out
+
+
+def _make_architectures(target_archs):
+    SPECIFIERS = ["<=", "<", "!"]
+    out = set()
+    for config in target_archs.split(","):
+        config = config.strip()
+        spec = ""
+        arch = config
+        for mark in SPECIFIERS:
+            # Guard against incorrectly parsing fma3<...>
+            if mark in config[:2]:
+                spec = mark
+                arch = arch[len(spec) :]
+                break
+
+        out |= _parse_spec(spec, arch)
+    return list(out)
 
 
 def _pprint_config(config):
@@ -117,7 +155,7 @@ def gen_from_config(config, target_arch):
             target_specific_templates[arch] += signature
             file_template += "extern " + signature
 
-    file_template += "#else\n#endif"
+    file_template += "#else\n#endif /* {1}_HPP */"
     for metric, spec in config.items():
         file_content = file_template.format(
             metric,

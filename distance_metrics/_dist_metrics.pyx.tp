@@ -26,10 +26,6 @@ implementation_specific_values = [
 # License: BSD
 
 import numpy as np
-cimport numpy as cnp
-
-cnp.import_array()  # required in order to use C-API
-
 from libc.math cimport fabs, sqrt, exp, pow, cos, sin, asin
 
 from scipy.sparse import csr_matrix, issparse
@@ -43,6 +39,9 @@ cdef inline double fmax(double a, double b) noexcept nogil:
 def get_distance_metric(x, metric, **kwargs):
     dst = SimdDistanceMetric if x.dtype == np.float64 else SimdDistanceMetric32
     return dst.get_metric(metric, **kwargs)
+
+cpdef get_best_arch():
+    _get_best_arch()
 
 {{for name_suffix, INPUT_DTYPE_t, INPUT_DTYPE in implementation_specific_values}}
 from sklearn.metrics._dist_metrics cimport DistanceMetric{{name_suffix}}
