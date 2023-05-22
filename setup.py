@@ -13,13 +13,13 @@ import glob
 
 from setuptools import Command, Extension, setup
 from setuptools.command.build_ext import build_ext as _build_ext
-from sklearn import _min_dependencies as min_deps  # noqa
 from sklearn._build_utils import _check_cython_version  # noqa
 from sklearn.externals._packaging.version import parse as parse_version  # noqa
-from distance_metrics._generate import generate_code
+from distance_metrics._generate import generate_code, GENERATED_DIR
 import traceback
 import importlib
 from collections import defaultdict
+import contextlib
 
 VERSION = 0.1
 SRC_NAME = "distance_metrics"
@@ -30,34 +30,36 @@ with open("README.rst") as f:
 MAINTAINER = "Meekail Zain"
 MAINTAINER_EMAIL = "zainmeekail@gmail.com"
 LICENSE = "new BSD"
-GENERATED_DIR = "distance_metrics/src/generated/"
+
+_OPENMP_SUPPORTED = False
 
 PYTEST_MIN_VERSION = "5.4.3"
 CYTHON_MIN_VERSION = "0.29.33"
-SKLEARN_MIN_VERSION = "1.2"
+SKLEARN_MIN_VERSION = "1.3.dev0"
 
+# TODO: Enable and trim as needed
 # 'build' and 'install' is included to have structured metadata for CI.
 # It will NOT be included in setup's extras_require
 # The values are (version_spec, comma separated tags)
 dependent_packages = {
     "scikit-learn": (SKLEARN_MIN_VERSION, "install"),
     "cython": (CYTHON_MIN_VERSION, "build"),
-    "matplotlib": ("3.1.3", "docs, examples, tests"),
-    "pandas": ("1.0.5", "benchmark, docs, examples, tests"),
-    "seaborn": ("0.9.0", "docs, examples"),
+    # "matplotlib": ("3.1.3", "docs, examples, tests"),
+    # "pandas": ("1.0.5", "benchmark, docs, examples, tests"),
+    # "seaborn": ("0.9.0", "docs, examples"),
     "pytest": (PYTEST_MIN_VERSION, "tests"),
     "pytest-cov": ("2.9.0", "tests"),
     "flake8": ("3.8.2", "tests"),
     "black": ("23.3.0", "tests"),
     "mypy": ("0.961", "tests"),
-    "sphinx": ("4.0.1", "docs"),
-    "sphinx-gallery": ("0.7.0", "docs"),
-    "numpydoc": ("1.2.0", "docs, tests"),
-    "Pillow": ("7.1.2", "docs"),
-    "plotly": ("5.10.0", "docs, examples"),
+    # "sphinx": ("4.0.1", "docs"),
+    # "sphinx-gallery": ("0.7.0", "docs"),
+    # "numpydoc": ("1.2.0", "docs, tests"),
+    # "Pillow": ("7.1.2", "docs"),
+    # "plotly": ("5.10.0", "docs, examples"),
     # XXX: Pin conda-lock to the latest released version (needs manual update
     # from time to time)
-    "conda-lock": ("1.4.0", "maintenance"),
+    # "conda-lock": ("1.4.0", "maintenance"),
 }
 
 
@@ -69,8 +71,35 @@ for package, (min_version, extras) in dependent_packages.items():
 
 
 class build_ext(_build_ext):
+    def finalize_options(self):
+        _build_ext.finalize_options(self)
+        if self.parallel is None:
+            # Do not override self.parallel if already defined by
+            # command-line flag (--parallel or -j)
+
+            parallel = os.environ.get("SLSDM_BUILD_PARALLEL")
+            if parallel:
+                self.parallel = int(parallel)
+        if self.parallel:
+            print("setting parallel=%d " % self.parallel)
+
+    def build_extensions(self):
+        from sklearn._build_utils.openmp_helpers import get_openmp_flag
+
+        global _OPENMP_SUPPORTED
+        if _OPENMP_SUPPORTED:
+            openmp_flag = get_openmp_flag()
+
+            for e in self.extensions:
+                e.extra_compile_args += openmp_flag
+                e.extra_link_args += openmp_flag
+
+        _build_ext.build_extensions(self)
+
     def run(self):
-        """Build extensions in build directory, then copy if --inplace"""
+        # Specifying `build_clib` allows running `python setup.py develop`
+        # fully from a fresh clone.
+        self.run_command("build_clib")
         _build_ext.run(self)
 
 
@@ -155,12 +184,18 @@ def check_package_status(package, min_version):
 
 def build_extension_config():
     # TODO: Filter to only delete unsupported architectures and files that have
-    # had theor corresponding *.def files altered.
+    # had their corresponding *.def files altered.
     if os.path.exists(GENERATED_DIR):
         shutil.rmtree(GENERATED_DIR)
+
+    # TODO: Filter to only generate files that are either missing or have had
+    # their corresponding *.def files altered.
     # Generate simd compilation targets from *.def files
-    generate_code()
-    srcs = ["_dist_metrics.pyx.tp", "_dist_metrics.pxd.tp", "src/_dist_optim.cpp"]
+
+    # TODO: Allow for more nuanced subset generation
+    target_arch = os.environ.get("SLSDM_SIMD_ARCH", "sse3")
+    generate_code(target_arch)
+    srcs = ["_dist_metrics.pyx.tp", "_dist_metrics.pxd", "src/_dist_optim.cpp"]
     srcs += [
         "/".join(GENERATED_DIR.split("/")[1:]) + os.path.basename(p)
         for p in glob.glob("distance_metrics/src/generated/*.cpp")
@@ -169,13 +204,58 @@ def build_extension_config():
         SRC_NAME: [
             {
                 "sources": srcs,
-                "include_np": True,
                 "language": "c++",
                 "include_dirs": ["src/"],
             },
         ],
     }
     return extension_config
+
+
+def cythonize_extensions(extension):
+    """Check that a recent Cython is available and cythonize extensions"""
+    _check_cython_version()
+    from Cython.Build import cythonize
+    from sklearn._build_utils.pre_build_helpers import basic_check_build
+    from sklearn._build_utils.openmp_helpers import check_openmp_support
+
+    # Fast fail before cythonization if compiler fails compiling basic test
+    # code even without OpenMP
+    basic_check_build()
+
+    # check simple compilation with OpenMP. If it fails slsdm will be
+    # built without OpenMP.
+    # `check_openmp_support` compiles a small test program to see if the
+    # compilers are properly configured to build with OpenMP. This is expensive
+    # and we only want to call this function once.
+    global _OPENMP_SUPPORTED
+    _OPENMP_SUPPORTED = check_openmp_support()
+
+    n_jobs = 1
+    with contextlib.suppress(ImportError):
+        import joblib
+
+        n_jobs = joblib.cpu_count()
+
+    # Additional checks for Cython
+    cython_enable_debug_directives = (
+        os.environ.get("SLSDM_ENABLE_DEBUG_CYTHON_DIRECTIVES", "0") != "0"
+    )
+
+    compiler_directives = {
+        "language_level": 3,
+        "boundscheck": cython_enable_debug_directives,
+        "wraparound": False,
+        "initializedcheck": False,
+        "nonecheck": False,
+        "cdivision": True,
+    }
+
+    return cythonize(
+        extension,
+        nthreads=n_jobs,
+        compiler_directives=compiler_directives,
+    )
 
 
 def configure_extension_modules():
@@ -347,9 +427,9 @@ def setup_package():
         if sys.version_info < required_python_version:
             required_version = "%d.%d" % required_python_version
             raise RuntimeError(
-                "SLSDM requires Python %s or later. The current"
-                " Python version is %s installed in %s."
-                % (required_version, platform.python_version(), sys.executable)
+                f"SLSDM requires Python {required_version} or later. The current Python"
+                f" version is {platform.python_version()} installed in"
+                f" {sys.executable}."
             )
 
         check_package_status("sklearn", SKLEARN_MIN_VERSION)

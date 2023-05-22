@@ -132,7 +132,6 @@ dmypy.json
 *.c
 *.cpp
 */_dist_metrics.pyx
-*/_dist_metrics.pxd
 distance_metrics/src/generated/*
 
 # Except those specifically marked in src
