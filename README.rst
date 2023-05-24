@@ -1,11 +1,10 @@
 # Scikit-Learn SIMD DistanceMetrics (SLSDM)
 
-# To Build:
+# Install From Source:
 
-1. Create a new conda environment: `conda create -n <env_name> python~=3.10`
+1. Create a new conda environment with `xsimd`: `conda create -n <env_name> -c conda-forge python~=3.10 xsimd `
 2. Activate the conda environment: `conda activate <env_name>`
-3. Install `xsimd`: `conda install -c conda-forge xsimd`
-4. Run `PIP_EXTRA_INDEX_URL=https://pypi.anaconda.org/scipy-wheels-nightly/simple pip install -e .`
+3. Run `PIP_EXTRA_INDEX_URL=https://pypi.anaconda.org/scipy-wheels-nightly/simple pip install -e .`
 
 # Specify SIMD Target Architectures
 
