@@ -119,6 +119,8 @@ def get_config():
 
 
 def gen_from_config(config, target_arch):
+    # TODO: Parse definition files directly in python rather than relying on C
+    # macros
     ARCHITECTURES = _make_architectures(target_arch)
     print(f"Generating the following SIMD targets: {ARCHITECTURES}...\n")
 

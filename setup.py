@@ -277,7 +277,7 @@ def configure_extension_modules():
 
     is_pypy = platform.python_implementation() == "PyPy"
     np_include = numpy.get_include()
-    default_optimization_level = "O2"
+    default_optimization_level = "O3"
 
     if os.name == "posix":
         default_libraries = ["m"]
@@ -396,7 +396,7 @@ def setup_package():
             "Programming Language :: Python",
             "Topic :: Software Development",
             "Topic :: Scientific/Engineering",
-            "Development Status :: 5 - Production/Stable",
+            "Development Status :: 2 - Pre-Alpha",
             "Operating System :: Microsoft :: Windows",
             "Operating System :: POSIX",
             "Operating System :: Unix",
@@ -407,7 +407,6 @@ def setup_package():
             "Programming Language :: Python :: 3.10",
             "Programming Language :: Python :: 3.11",
             "Programming Language :: Python :: Implementation :: CPython",
-            "Programming Language :: Python :: Implementation :: PyPy",
         ],
         cmdclass=cmdclass,
         python_requires=python_requires,
@@ -420,10 +419,8 @@ def setup_package():
         },
     )
 
-    commands = [arg for arg in sys.argv[1:] if not arg.startswith("-")]
-    if not all(
-        command in ("egg_info", "dist_info", "clean", "check") for command in commands
-    ):
+    arguments = [arg for arg in sys.argv[1:] if not arg.startswith("-")]
+    if not any(arg in ("egg_info", "dist_info", "clean", "check") for arg in arguments):
         if sys.version_info < required_python_version:
             required_version = "%d.%d" % required_python_version
             raise RuntimeError(

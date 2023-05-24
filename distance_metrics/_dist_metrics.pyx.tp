@@ -46,12 +46,16 @@ cpdef get_best_arch():
 {{for name_suffix, INPUT_DTYPE_t, INPUT_DTYPE in implementation_specific_values}}
 from sklearn.metrics._dist_metrics cimport DistanceMetric{{name_suffix}}
 
+cdef {{INPUT_DTYPE_t}} INF{{name_suffix}} = np.inf
+
 METRIC_MAPPING{{name_suffix}} = {
     'euclidean': EuclideanDistance{{name_suffix}},
     'l2': EuclideanDistance{{name_suffix}},
     'manhattan': ManhattanDistance{{name_suffix}},
     'cityblock': ManhattanDistance{{name_suffix}},
     'l1': ManhattanDistance{{name_suffix}},
+    'chebyshev': ChebyshevDistance{{name_suffix}},
+    'infinity': ChebyshevDistance{{name_suffix}},
 }
 
 cdef class SimdDistanceMetric{{name_suffix}}(DistanceMetric{{name_suffix}}):
@@ -76,7 +80,7 @@ cdef class SimdDistanceMetric{{name_suffix}}(DistanceMetric{{name_suffix}}):
             try:
                 metric = METRIC_MAPPING{{name_suffix}}[metric]
             except:
-                raise ValueError("Unrecognized metric '%s'" % metric)
+                raise ValueError(f"Unrecognized metric '{metric}'. Please select something from {METRIC_MAPPING}")
         return metric(**kwargs)
 
 #------------------------------------------------------------
@@ -162,7 +166,7 @@ cdef class EuclideanDistance{{name_suffix}}(SimdDistanceMetric{{name_suffix}}):
         const {{INPUT_DTYPE_t}}* x2,
         intp_t size,
     ) except -1 nogil:
-        return self._rdist_to_dist(xsimd_euclidean_rdist[{{INPUT_DTYPE_t}}](x1, x2, size))
+        return EuclideanDistance{{name_suffix}}._rdist_to_dist(self, xsimd_euclidean_rdist[{{INPUT_DTYPE_t}}](x1, x2, size))
 
     cdef inline float64_t rdist(self,
         const {{INPUT_DTYPE_t}}* x1,
@@ -171,7 +175,7 @@ cdef class EuclideanDistance{{name_suffix}}(SimdDistanceMetric{{name_suffix}}):
     ) except -1 nogil:
         return xsimd_euclidean_rdist[{{INPUT_DTYPE_t}}](x1, x2, size)
 
-    cdef float64_t _rdist_to_dist(self, {{INPUT_DTYPE_t}} rdist) except -1 nogil:
+    cdef inline float64_t _rdist_to_dist(self, {{INPUT_DTYPE_t}} rdist) except -1 nogil:
         return sqrt(rdist)
 
     cdef inline float64_t _dist_to_rdist(self, {{INPUT_DTYPE_t}} dist) except -1 nogil:
@@ -183,7 +187,7 @@ cdef class EuclideanDistance{{name_suffix}}(SimdDistanceMetric{{name_suffix}}):
     def dist_to_rdist(self, dist):
         return dist ** 2
 
-    cdef float64_t rdist_csr(
+    cdef inline float64_t rdist_csr(
         self,
         const {{INPUT_DTYPE_t}}* x1_data,
         const int32_t[:] x1_indices,
@@ -248,16 +252,282 @@ cdef class EuclideanDistance{{name_suffix}}(SimdDistanceMetric{{name_suffix}}):
         const intp_t size,
     ) except -1 nogil:
         return sqrt(
-            self.rdist_csr(
-            x1_data,
-            x1_indices,
-            x2_data,
-            x2_indices,
-            x1_start,
-            x1_end,
-            x2_start,
-            x2_end,
-            size,
-        ))
+            EuclideanDistance{{name_suffix}}.rdist_csr(
+                self,
+                x1_data,
+                x1_indices,
+                x2_data,
+                x2_indices,
+                x1_start,
+                x1_end,
+                x2_start,
+                x2_end,
+                size,
+            )
+        )
 
+#------------------------------------------------------------
+# Chebyshev Distance
+#  d = max_i(abs(x_i - y_i))
+cdef class ChebyshevDistance{{name_suffix}}(SimdDistanceMetric{{name_suffix}}):
+    """Chebyshev/Infinity Distance
+
+    .. math::
+       D(x, y) = max_i (|x_i - y_i|)
+    """
+    def __init__(self):
+        self.p = INF{{name_suffix}}
+
+    cdef inline float64_t dist(
+        self,
+        const {{INPUT_DTYPE_t}}* x1,
+        const {{INPUT_DTYPE_t}}* x2,
+        intp_t size,
+    ) except -1 nogil:
+        return xsimd_chebyshev_dist[{{INPUT_DTYPE_t}}](x1, x2, size)
+
+
+    cdef inline float64_t dist_csr(
+        self,
+        const {{INPUT_DTYPE_t}}* x1_data,
+        const int32_t[:] x1_indices,
+        const {{INPUT_DTYPE_t}}* x2_data,
+        const int32_t[:] x2_indices,
+        const int32_t x1_start,
+        const int32_t x1_end,
+        const int32_t x2_start,
+        const int32_t x2_end,
+        const intp_t size,
+    ) except -1 nogil:
+
+        cdef:
+            intp_t ix1, ix2
+            intp_t i1 = x1_start
+            intp_t i2 = x2_start
+
+            float64_t d = 0.0
+
+        while i1 < x1_end and i2 < x2_end:
+            ix1 = x1_indices[i1]
+            ix2 = x2_indices[i2]
+
+            if ix1 == ix2:
+                d = fmax(d, fabs(x1_data[i1] - x2_data[i2]))
+                i1 = i1 + 1
+                i2 = i2 + 1
+            elif ix1 < ix2:
+                d = fmax(d, fabs(x1_data[i1]))
+                i1 = i1 + 1
+            else:
+                d = fmax(d, fabs(x2_data[i2]))
+                i2 = i2 + 1
+
+        if i1 == x1_end:
+            while i2 < x2_end:
+                d = fmax(d, fabs(x2_data[i2]))
+                i2 = i2 + 1
+        else:
+            while i1 < x1_end:
+                d = fmax(d, fabs(x1_data[i1]))
+                i1 = i1 + 1
+
+        return d
+
+#------------------------------------------------------------
+# Minkowski Distance
+cdef class MinkowskiDistance{{name_suffix}}(SimdDistanceMetric{{name_suffix}}):
+    r"""Minkowski Distance
+
+    .. math::
+        D(x, y) = {||u-v||}_p
+
+    when w is None.
+
+    Here is the more general expanded expression for the weighted case:
+
+    .. math::
+        D(x, y) = [\sum_i w_i *|x_i - y_i|^p] ^ (1/p)
+
+    Parameters
+    ----------
+    p : int
+        The order of the p-norm of the difference (see above).
+    w : (N,) array-like (optional)
+        The weight vector.
+
+    Minkowski Distance requires p >= 1 and finite. For p = infinity,
+    use ChebyshevDistance.
+    Note that for p=1, ManhattanDistance is more efficient, and for
+    p=2, EuclideanDistance is more efficient.
+    """
+    def __init__(self, p, w=None):
+        if p < 1:
+            raise ValueError("p must be greater than 1")
+        elif np.isinf(p):
+            raise ValueError("MinkowskiDistance requires finite p. "
+                             "For p=inf, use ChebyshevDistance.")
+
+        self.p = p
+        if w is not None:
+            w_array = check_array(
+                w, ensure_2d=False, dtype=np.float64, input_name="w"
+            )
+            if (w_array < 0).any():
+                raise ValueError("w cannot contain negative weights")
+            self.vec = w_array
+            self.size = self.vec.shape[0]
+        else:
+            self.vec = np.asarray([], dtype=np.float64)
+            self.size = 0
+
+    def _validate_data(self, X):
+        if self.size > 0 and X.shape[1] != self.size:
+            raise ValueError("MinkowskiDistance: the size of w must match "
+                             f"the number of features ({X.shape[1]}). "
+                             f"Currently len(w)={self.size}.")
+
+    cdef inline float64_t rdist(
+        self,
+        const {{INPUT_DTYPE_t}}* x1,
+        const {{INPUT_DTYPE_t}}* x2,
+        intp_t size,
+    ) except -1 nogil:
+        cdef float64_t d=0
+        cdef intp_t j
+        cdef bint has_w = self.size > 0
+        if has_w:
+            for j in range(size):
+                d += (self.vec[j] * pow(fabs(x1[j] - x2[j]), self.p))
+        else:
+            for j in range(size):
+                d += (pow(fabs(x1[j] - x2[j]), self.p))
+        return d
+
+    cdef inline float64_t dist(
+        self,
+        const {{INPUT_DTYPE_t}}* x1,
+        const {{INPUT_DTYPE_t}}* x2,
+        intp_t size,
+    ) except -1 nogil:
+        return pow(MinkowskiDistance{{name_suffix}}.rdist(self, x1, x2, size), 1. / self.p)
+
+    cdef inline float64_t _rdist_to_dist(self, {{INPUT_DTYPE_t}} rdist) except -1 nogil:
+        return pow(rdist, 1. / self.p)
+
+    cdef inline float64_t _dist_to_rdist(self, {{INPUT_DTYPE_t}} dist) except -1 nogil:
+        return pow(dist, self.p)
+
+    def rdist_to_dist(self, rdist):
+        return rdist ** (1. / self.p)
+
+    def dist_to_rdist(self, dist):
+        return dist ** self.p
+
+    cdef inline float64_t rdist_csr(
+        self,
+        const {{INPUT_DTYPE_t}}* x1_data,
+        const int32_t[:] x1_indices,
+        const {{INPUT_DTYPE_t}}* x2_data,
+        const int32_t[:] x2_indices,
+        const int32_t x1_start,
+        const int32_t x1_end,
+        const int32_t x2_start,
+        const int32_t x2_end,
+        const intp_t size,
+    ) except -1 nogil:
+
+        cdef:
+            intp_t ix1, ix2
+            intp_t i1 = x1_start
+            intp_t i2 = x2_start
+
+            float64_t d = 0.0
+            bint has_w = self.size > 0
+
+        if has_w:
+            while i1 < x1_end and i2 < x2_end:
+                ix1 = x1_indices[i1]
+                ix2 = x2_indices[i2]
+
+                if ix1 == ix2:
+                    d = d + (self.vec[ix1] * pow(fabs(
+                        x1_data[i1] - x2_data[i2]
+                    ), self.p))
+                    i1 = i1 + 1
+                    i2 = i2 + 1
+                elif ix1 < ix2:
+                    d = d + (self.vec[ix1] * pow(fabs(x1_data[i1]), self.p))
+                    i1 = i1 + 1
+                else:
+                    d = d + (self.vec[ix2] * pow(fabs(x2_data[i2]), self.p))
+                    i2 = i2 + 1
+
+            if i1 == x1_end:
+                while i2 < x2_end:
+                    ix2 = x2_indices[i2]
+                    d = d + (self.vec[ix2] * pow(fabs(x2_data[i2]), self.p))
+                    i2 = i2 + 1
+            else:
+                while i1 < x1_end:
+                    ix1 = x1_indices[i1]
+                    d = d + (self.vec[ix1] * pow(fabs(x1_data[i1]), self.p))
+                    i1 = i1 + 1
+
+            return d
+        else:
+            while i1 < x1_end and i2 < x2_end:
+                ix1 = x1_indices[i1]
+                ix2 = x2_indices[i2]
+
+                if ix1 == ix2:
+                    d = d + (pow(fabs(
+                        x1_data[i1] - x2_data[i2]
+                    ), self.p))
+                    i1 = i1 + 1
+                    i2 = i2 + 1
+                elif ix1 < ix2:
+                    d = d + (pow(fabs(x1_data[i1]), self.p))
+                    i1 = i1 + 1
+                else:
+                    d = d + (pow(fabs(x2_data[i2]), self.p))
+                    i2 = i2 + 1
+
+            if i1 == x1_end:
+                while i2 < x2_end:
+                    d = d + (pow(fabs(x2_data[i2]), self.p))
+                    i2 = i2 + 1
+            else:
+                while i1 < x1_end:
+                    d = d + (pow(fabs(x1_data[i1]), self.p))
+                    i1 = i1 + 1
+
+            return d
+
+    cdef inline float64_t dist_csr(
+        self,
+        const {{INPUT_DTYPE_t}}* x1_data,
+        const int32_t[:] x1_indices,
+        const {{INPUT_DTYPE_t}}* x2_data,
+        const int32_t[:] x2_indices,
+        const int32_t x1_start,
+        const int32_t x1_end,
+        const int32_t x2_start,
+        const int32_t x2_end,
+        const intp_t size,
+    ) except -1 nogil:
+        return pow(
+            MinkowskiDistance{{name_suffix}}.rdist_csr(
+                self,
+                x1_data,
+                x1_indices,
+                x2_data,
+                x2_indices,
+                x1_start,
+                x1_end,
+                x2_start,
+                x2_end,
+                size,
+            ),
+            1 / self.p
+        )
 {{endfor}}
