@@ -25,7 +25,7 @@ VERSION = 0.1
 SRC_NAME = "distance_metrics"
 DISTNAME = "distmetric-xsimd"
 DESCRIPTION = "A set of SIMD-accelerated DistanceMetric implementations"
-with open("README.rst") as f:
+with open("README.md") as f:
     LONG_DESCRIPTION = f.read()
 MAINTAINER = "Meekail Zain"
 MAINTAINER_EMAIL = "zainmeekail@gmail.com"
@@ -288,7 +288,8 @@ def configure_extension_modules():
     # TODO: Update to explicitly use instructions up-to and including those
     # provided by the user when building, so as to avoid e.g. unintended
     # "promotions" of SSE3 instructions to AVX
-    default_extra_compile_args = ["-march=native"]
+    march_flag = os.environ.get("SLSDM_MARCH", "native")
+    default_extra_compile_args = [f"-march={march_flag}"]
     build_with_debug_symbols = os.environ.get("SLSDM_ENABLE_DEBUG_SYMBOLS", "0") != "0"
     if os.name == "posix":
         if build_with_debug_symbols:
