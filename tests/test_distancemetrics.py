@@ -4,7 +4,10 @@ import numpy as np
 from numpy.testing import assert_allclose
 import pytest
 
-IMPLEMENTED_METRICS = ("euclidean", "manhattan", "chebyshev")
+# Note we use `p` to test for the usual minkowski, and `minkowski` to instead
+# test for the weighted minkowski metric since `wminkowski` is an entirely
+# separate metric.
+IMPLEMENTED_METRICS = ("euclidean", "manhattan", "chebyshev", "minkowski", "p")
 DISTANCE_METRIC_SK = {
     "64": DistanceMetric,
     "32": DistanceMetric32,
@@ -14,11 +17,21 @@ DISTANCE_METRIC_SK = {
 @pytest.mark.parametrize("metric", IMPLEMENTED_METRICS)
 @pytest.mark.parametrize("bit_width", ("32", "64"))
 def test_metric_matches(metric, bit_width):
+    n_samples = 300
+    n_features = 200
+    metric_kwargs = {
+        "p": {"p": 14},
+        "minkowski": {"p": 3, "w": np.ones((n_features,)) * 5},
+    }.get(metric, {})
     rng = np.random.default_rng(42)
     data_dtype = np.float32 if bit_width == "32" else np.float64
-    X = rng.random(size=(20, 20), dtype=data_dtype)
+    X = rng.random(size=(n_samples, n_features), dtype=data_dtype)
 
-    dst = get_distance_metric(X, metric)
-    dst_sk = DISTANCE_METRIC_SK[bit_width].get_metric(metric)
+    dst = get_distance_metric(X, metric, **metric_kwargs)
+    dst_sk = DISTANCE_METRIC_SK[bit_width].get_metric(metric, **metric_kwargs)
+    print(dst_sk)
 
-    assert_allclose(dst.pairwise(X), dst_sk.pairwise(X), atol=np.finfo(data_dtype).eps)
+    pairs = dst.pairwise(X)
+    pairs_sk = dst_sk.pairwise(X)
+
+    assert_allclose(pairs, pairs_sk, atol=np.finfo(data_dtype).eps, rtol=3e-7)

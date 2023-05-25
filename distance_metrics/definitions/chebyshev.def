@@ -1,16 +1,20 @@
-SETUP
+SETUP_UNROLL
+batch_type simd_x_##ITER;
+batch_type simd_y_##ITER;
 batch_type segment_##ITER = batch_type::broadcast(0.);
 
 BODY
-batch_type simd_x_##ITER = batch_type::load(&a[idx + inc * ITER], xs::unaligned_mode{}); \
-batch_type simd_y_##ITER = batch_type::load(&b[idx + inc * ITER], xs::unaligned_mode{}); \
+simd_x_##ITER = batch_type::load(&a[idx + inc * ITER], xs::unaligned_mode{});
+simd_y_##ITER = batch_type::load(&b[idx + inc * ITER], xs::unaligned_mode{});
 segment_##ITER = xs::max(segment_##ITER, xs::abs(simd_x_##ITER - simd_y_##ITER));
 
-REMAINDER
+REDUCTION
 // Reduction
 segment_0 = xs::reduce_max(xs::max(segment_0, segment_1));
 double scalar_max = *(Type*)&segment_0;
 
-// Remaining part that cannot be vectorize
-REMAINDER_LOOP(scalar_max = fmax(scalar_max, fabs(a[idx] - b[idx]));)
+REMAINDER
+scalar_max = fmax(scalar_max, fabs(a[idx] - b[idx]));
+
+OUT
 return (Type) scalar_max;

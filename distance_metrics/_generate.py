@@ -2,6 +2,7 @@ import glob
 from textwrap import dedent, indent
 from os.path import join, basename
 from pathlib import Path
+import io
 
 PY_TAB = "    "
 GENERATED_DIR = "distance_metrics/src/generated/"
@@ -96,7 +97,15 @@ def _pprint_config(config):
 
 
 def get_config():
-    SECTIONS = ("SETUP", "BODY", "REDUCTION", "REMAINDER", "OUT")
+    SECTIONS = (
+        "ARGS",
+        "SETUP",
+        "SETUP_UNROLL",
+        "BODY",
+        "REDUCTION",
+        "REMAINDER",
+        "OUT",
+    )
     definitions = glob.glob(join(DEFINITIONS_DIR, r"*.def"))
     config = {}
     for def_file_name in definitions:
@@ -159,57 +168,63 @@ def gen_from_config(config, target_arch):
     print(f"Generating the following SIMD targets: {ARCHITECTURES}\n")
 
     file_template = dedent("""\
-        #ifndef {1}_HPP
-        #define {1}_HPP
+        #ifndef {2}_HPP
+        #define {2}_HPP
         #include "utils.hpp"
 
         struct _{0}{{
         template <class Arch, typename Type>
-        Type operator()(Arch, const Type* a, const Type* b, const std::size_t size);
+        Type operator()(Arch, const Type* a, const Type* b, const std::size_t size{1});
         }};
 
         template <class Arch, typename Type>
-        Type _{0}::operator()(Arch, const Type* a, const Type* b, const std::size_t size){{
+        Type _{0}::operator()(Arch, const Type* a, const Type* b, const std::size_t size{1}){{
             using batch_type = xs::batch<Type, Arch>;
-        {2}
-
         {3}
-
-            // Remaining part that cannot be vectorize
         {4}
         {5}
+
+            // Remaining part that cannot be vectorize
+        {6}
+        {7}
         }}
         """)  # noqa
-    target_specific_templates = {}
-    for arch in ARCHITECTURES:
-        target_specific_templates[arch] = """#include "{0}.hpp"\n"""
-        file_template += "\n"
-        file_template += f"// {arch.upper()}\n"
-        for type in ("float", "double"):
-            signature = f"template {type} _{{0}}::operator()<xs::{arch}, {type}>(xs::{arch}, const {type} *, const  {type} *, const std::size_t);\n"  # noqa
-            target_specific_templates[arch] += signature
-            file_template += "extern " + signature
-
-    file_template += "#else\n#endif /* {1}_HPP */"
+    signature_template = "template " + io.StringIO(file_template).readlines()[
+        10
+    ].replace("operator()(Arch", "operator()<xs::{2}, Type>(xs::{2}")
     for metric, spec in config.items():
-        setup_func = lambda n: _make_parseable(spec["SETUP"]).format(n)
+        setup_func = lambda n: _make_parseable(spec["SETUP_UNROLL"]).format(n)
         body_func = lambda n: _make_parseable(spec["BODY"]).format(n)
+        additional_args = ", " + spec["ARGS"] if spec["ARGS"] else ""
         file_content = file_template.format(
             metric,
+            additional_args,
             metric.upper(),
+            _tab_indent(spec["SETUP"] if spec["SETUP"] else ""),
             _tab_indent(_MAKE_STD_VEC_LOOP(setup_func, body_func)),
             _tab_indent(spec["REDUCTION"]),
             _tab_indent(_REMAINDER_LOOP(spec["REMAINDER"])),
             indent(spec["OUT"], PY_TAB),
         )
-        file_path = join(GENERATED_DIR, f"{metric}.hpp")
-        with open(file_path, "w") as file:
-            file.write(file_content)
 
         for arch in ARCHITECTURES:
             file_path = join(GENERATED_DIR, f"{metric}_{arch}.cpp")
+            target_specific_template = """#include "{0}.hpp"\n"""
+            for _type in ("float", "double"):
+                signature = (
+                    signature_template.format(metric, additional_args, arch)
+                    .replace("Type", _type)
+                    .replace("{", ";")
+                )
+                target_specific_template += signature
+                file_content += "extern " + signature
             with open(file_path, "w") as file:
-                file.write(target_specific_templates[arch].format(metric))
+                file.write(target_specific_template.format(metric))
+
+        file_path = join(GENERATED_DIR, f"{metric}.hpp")
+        file_content += "#else\n#endif /* {metric.upper()}_HPP */"
+        with open(file_path, "w") as file:
+            file.write(file_content)
 
 
 def _tab_indent(str):

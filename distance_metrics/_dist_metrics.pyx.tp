@@ -56,6 +56,9 @@ METRIC_MAPPING{{name_suffix}} = {
     'l1': ManhattanDistance{{name_suffix}},
     'chebyshev': ChebyshevDistance{{name_suffix}},
     'infinity': ChebyshevDistance{{name_suffix}},
+    'minkowski': MinkowskiDistance{{name_suffix}},
+    'p': MinkowskiDistance{{name_suffix}},
+    'wminkowski': MinkowskiDistance{{name_suffix}},
 }
 
 cdef class SimdDistanceMetric{{name_suffix}}(DistanceMetric{{name_suffix}}):
@@ -360,6 +363,9 @@ cdef class MinkowskiDistance{{name_suffix}}(SimdDistanceMetric{{name_suffix}}):
     Note that for p=1, ManhattanDistance is more efficient, and for
     p=2, EuclideanDistance is more efficient.
     """
+
+    cdef {{INPUT_DTYPE_t}}[::1] w_vec{{name_suffix}}
+
     def __init__(self, p, w=None):
         if p < 1:
             raise ValueError("p must be greater than 1")
@@ -370,14 +376,14 @@ cdef class MinkowskiDistance{{name_suffix}}(SimdDistanceMetric{{name_suffix}}):
         self.p = p
         if w is not None:
             w_array = check_array(
-                w, ensure_2d=False, dtype=np.float64, input_name="w"
+                w, ensure_2d=False, dtype={{INPUT_DTYPE}}, input_name="w"
             )
             if (w_array < 0).any():
                 raise ValueError("w cannot contain negative weights")
-            self.vec = w_array
-            self.size = self.vec.shape[0]
+            self.w_vec{{name_suffix}} = w_array
+            self.size = self.w_vec{{name_suffix}}.shape[0]
         else:
-            self.vec = np.asarray([], dtype=np.float64)
+            self.w_vec{{name_suffix}} = np.asarray([], dtype={{INPUT_DTYPE}})
             self.size = 0
 
     def _validate_data(self, X):
@@ -392,16 +398,11 @@ cdef class MinkowskiDistance{{name_suffix}}(SimdDistanceMetric{{name_suffix}}):
         const {{INPUT_DTYPE_t}}* x2,
         intp_t size,
     ) except -1 nogil:
-        cdef float64_t d=0
-        cdef intp_t j
         cdef bint has_w = self.size > 0
         if has_w:
-            for j in range(size):
-                d += (self.vec[j] * pow(fabs(x1[j] - x2[j]), self.p))
+            return xsimd_minkowski_w_rdist[{{INPUT_DTYPE_t}}](x1, x2, size, <const {{INPUT_DTYPE_t}}*> &self.w_vec{{name_suffix}}[0], self.p)
         else:
-            for j in range(size):
-                d += (pow(fabs(x1[j] - x2[j]), self.p))
-        return d
+            return xsimd_minkowski_rdist[{{INPUT_DTYPE_t}}](x1, x2, size, self.p)
 
     cdef inline float64_t dist(
         self,
