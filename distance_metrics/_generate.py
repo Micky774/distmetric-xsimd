@@ -96,33 +96,67 @@ def _pprint_config(config):
 
 
 def get_config():
+    SECTIONS = ("SETUP", "BODY", "REDUCTION", "REMAINDER", "OUT")
     definitions = glob.glob(join(DEFINITIONS_DIR, r"*.def"))
     config = {}
     for def_file_name in definitions:
         mode = None
         with open(def_file_name) as file:
-            specification = {"SETUP": None, "BODY": None, "REMAINDER": None}
+            specification = {section: None for section in SECTIONS}
             section = ""
             for line in file:
                 line = line.rstrip()
-                if line in ("SETUP", "BODY", "REMAINDER"):
+                if line in SECTIONS:
                     if mode is not None:
-                        specification[mode] = section
+                        specification[mode] = section.strip()
                     section = ""
                     mode = line
                 else:
                     section += line + "\n"
-            specification[mode] = section
+            specification[mode] = section.strip()
         function_name = basename(def_file_name)[:-4]
         config[function_name] = specification
     return config
+
+
+# TODO: Use dedent to make this a bit more readable
+def _REMAINDER_LOOP(body):
+    return f"""\
+for(std::size_t idx = vec_size; idx < size; ++idx) {{
+{_tab_indent(body)}
+}}"""
+
+
+def _UNROLL_2(UNROLL_BODY):
+    return f"""\
+// Begin unrolled
+{UNROLL_BODY(0)}
+
+{UNROLL_BODY(1)}
+// End unrolled"""
+
+
+def _MAKE_STD_VEC_LOOP(SETUP, BODY):
+    return f"""\
+// Begin SETUP
+{_UNROLL_2(SETUP)}
+// End SETUP
+
+// Begin VECTOR LOOP
+std::size_t inc = batch_type::size;
+std::size_t loop_iter = inc * 2;
+std::size_t vec_size = size - size % loop_iter;
+for(std::size_t idx = 0; idx < vec_size; idx += loop_iter) {{
+{indent(_UNROLL_2(BODY), PY_TAB)}
+}}
+// End VECTOR LOOP"""
 
 
 def gen_from_config(config, target_arch):
     # TODO: Parse definition files directly in python rather than relying on C
     # macros
     ARCHITECTURES = _make_architectures(target_arch)
-    print(f"Generating the following SIMD targets: {ARCHITECTURES}...\n")
+    print(f"Generating the following SIMD targets: {ARCHITECTURES}\n")
 
     file_template = dedent("""\
         #ifndef {1}_HPP
@@ -134,19 +168,18 @@ def gen_from_config(config, target_arch):
         Type operator()(Arch, const Type* a, const Type* b, const std::size_t size);
         }};
 
-        #define {1}_SETUP(ITER) \\
-        {2}
-        #define {1}_BODY(ITER) \\
-        {3}
         template <class Arch, typename Type>
         Type _{0}::operator()(Arch, const Type* a, const Type* b, const std::size_t size){{
             using batch_type = xs::batch<Type, Arch>;
-            MAKE_STD_VEC_LOOP({1}_SETUP, {1}_BODY, batch_type)
+        {2}
 
+        {3}
+
+            // Remaining part that cannot be vectorize
         {4}
+        {5}
         }}
         """)  # noqa
-
     target_specific_templates = {}
     for arch in ARCHITECTURES:
         target_specific_templates[arch] = """#include "{0}.hpp"\n"""
@@ -159,12 +192,15 @@ def gen_from_config(config, target_arch):
 
     file_template += "#else\n#endif /* {1}_HPP */"
     for metric, spec in config.items():
+        setup_func = lambda n: _make_parseable(spec["SETUP"]).format(n)
+        body_func = lambda n: _make_parseable(spec["BODY"]).format(n)
         file_content = file_template.format(
             metric,
             metric.upper(),
-            indent(spec["SETUP"], PY_TAB),
-            indent(spec["BODY"], PY_TAB),
-            indent(spec["REMAINDER"], PY_TAB),
+            _tab_indent(_MAKE_STD_VEC_LOOP(setup_func, body_func)),
+            _tab_indent(spec["REDUCTION"]),
+            _tab_indent(_REMAINDER_LOOP(spec["REMAINDER"])),
+            indent(spec["OUT"], PY_TAB),
         )
         file_path = join(GENERATED_DIR, f"{metric}.hpp")
         with open(file_path, "w") as file:
@@ -174,6 +210,20 @@ def gen_from_config(config, target_arch):
             file_path = join(GENERATED_DIR, f"{metric}_{arch}.cpp")
             with open(file_path, "w") as file:
                 file.write(target_specific_templates[arch].format(metric))
+
+
+def _tab_indent(str):
+    return indent(str, PY_TAB)
+
+
+def _make_parseable(raw):
+    return (
+        raw.strip()
+        .replace("{", "{{")
+        .replace("}", "}}")
+        .replace("##ITER", "{0}")
+        .replace("ITER", "{0}")
+    )
 
 
 def generate_code(target_arch):

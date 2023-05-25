@@ -1,19 +1,21 @@
 BODY
-batch_type simd_x_##ITER = batch_type::load(&a[idx + inc * ITER], xs::unaligned_mode{}); \
-batch_type simd_y_##ITER = batch_type::load(&b[idx + inc * ITER], xs::unaligned_mode{}); \
-diff_##ITER = simd_x_##ITER - simd_y_##ITER; \
+batch_type simd_x_##ITER = batch_type::load(&a[idx + inc * ITER], xs::unaligned_mode{});
+batch_type simd_y_##ITER = batch_type::load(&b[idx + inc * ITER], xs::unaligned_mode{});
+diff_##ITER = simd_x_##ITER - simd_y_##ITER;
 sum_##ITER += diff_##ITER * diff_##ITER;
 
 SETUP
-batch_type sum_##ITER = batch_type::broadcast(0.); \
+batch_type sum_##ITER = batch_type::broadcast(0.);
 batch_type diff_##ITER = batch_type::broadcast(0.);
 
-REMAINDER
+REDUCTION
 // Reduction
 sum_0 += sum_1;
 batch_type batch_sum = xs::reduce_add(sum_0);
 double scalar_sum = *(Type*)&batch_sum;
 
-// Remaining part that cannot be vectorize
-REMAINDER_LOOP(scalar_sum += (a[idx] - b[idx]) * (a[idx] - b[idx]);)
+REMAINDER
+scalar_sum += (a[idx] - b[idx]) * (a[idx] - b[idx]);
+
+OUT
 return (Type) scalar_sum;
