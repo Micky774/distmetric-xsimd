@@ -11,9 +11,9 @@ batch_type simd_w_##ITER;
 batch_type sum_##ITER = batch_type::broadcast((Type) 0.);
 
 BODY
-simd_x_##ITER = batch_type::load(&a[idx + inc * ITER], xs::unaligned_mode{});
-simd_y_##ITER = batch_type::load(&b[idx + inc * ITER], xs::unaligned_mode{});
-simd_w_##ITER = batch_type::load(&w[idx + inc * ITER], xs::unaligned_mode{});
+simd_x_##ITER = batch_type::load_unaligned(&a[idx + inc * ITER]);
+simd_y_##ITER = batch_type::load_unaligned(&b[idx + inc * ITER]);
+simd_w_##ITER = batch_type::load_unaligned(&w[idx + inc * ITER]);
 sum_##ITER += simd_w_##ITER * xs::pow(xs::fabs(simd_x_##ITER - simd_y_##ITER), power);
 
 REDUCTION
