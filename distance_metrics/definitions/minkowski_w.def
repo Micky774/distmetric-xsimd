@@ -1,26 +1,32 @@
 N_UNROLL
-4
+2
+
+ARGS
+const Type* w, const double p
+
+SETUP
+batch_type power = batch_type::broadcast((Type) p);
 
 SETUP_UNROLL
 batch_type simd_x_##ITER;
 batch_type simd_y_##ITER;
+batch_type simd_w_##ITER;
 batch_type sum_##ITER = batch_type::broadcast((Type) 0.);
 
 BODY
 simd_x_##ITER = batch_type::load_unaligned(&a[idx + inc * ITER]);
 simd_y_##ITER = batch_type::load_unaligned(&b[idx + inc * ITER]);
-sum_##ITER += xs::fabs(simd_x_##ITER - simd_y_##ITER);
+simd_w_##ITER = batch_type::load_unaligned(&w[idx + inc * ITER]);
+sum_##ITER += simd_w_##ITER * xs::pow(xs::fabs(simd_x_##ITER - simd_y_##ITER), power);
 
 REDUCTION
 // Reduction
 sum_0 += sum_1;
-sum_2 += sum_3;
-sum_0 += sum_2;
 batch_type batch_sum = xs::reduce_add(sum_0);
 double scalar_sum = *(Type*)&batch_sum;
 
 REMAINDER
-scalar_sum += fabs(a[idx] - b[idx]);
+scalar_sum += w[idx] * pow(fabs(a[idx] - b[idx]), p);
 
 OUT
 return (Type) scalar_sum;

@@ -1,0 +1,23 @@
+N_UNROLL
+2
+
+SETUP_UNROLL
+batch_type simd_x_##ITER;
+batch_type simd_y_##ITER;
+batch_type segment_##ITER = batch_type::broadcast(0.);
+
+BODY
+simd_x_##ITER = batch_type::load_unaligned(&a[idx + inc * ITER]);
+simd_y_##ITER = batch_type::load_unaligned(&b[idx + inc * ITER]);
+segment_##ITER = xs::max(segment_##ITER, xs::abs(simd_x_##ITER - simd_y_##ITER));
+
+REDUCTION
+// Reduction
+segment_0 = xs::reduce_max(xs::max(segment_0, segment_1));
+double scalar_max = *(Type*)&segment_0;
+
+REMAINDER
+scalar_max = fmax(scalar_max, fabs(a[idx] - b[idx]));
+
+OUT
+return (Type) scalar_max;
