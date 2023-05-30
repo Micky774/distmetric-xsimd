@@ -1,3 +1,6 @@
+N_UNROLL
+2
+
 SETUP_UNROLL
 batch_type simd_x_##ITER;
 batch_type simd_y_##ITER;

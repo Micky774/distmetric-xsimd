@@ -271,7 +271,6 @@ def configure_extension_modules():
         "NPY_NO_DEPRECATED_API",
         "NPY_1_7_API_VERSION",
     )
-    from sklearn._build_utils import cythonize_extensions
     from sklearn._build_utils import gen_from_templates
     import numpy
 

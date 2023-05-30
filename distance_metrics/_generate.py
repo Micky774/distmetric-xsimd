@@ -7,6 +7,7 @@ import io
 PY_TAB = "    "
 GENERATED_DIR = "distance_metrics/src/generated/"
 DEFINITIONS_DIR = "distance_metrics/definitions/"
+VECTOR_UNROLL_FACTOR = 4
 
 # XXX: Is there a nicer, more user-friendly approach towards
 # FMA{3, 4} instructions?
@@ -98,6 +99,7 @@ def _pprint_config(config):
 
 def get_config():
     SECTIONS = (
+        "N_UNROLL",
         "ARGS",
         "SETUP",
         "SETUP_UNROLL",
@@ -131,32 +133,35 @@ def get_config():
 # TODO: Use dedent to make this a bit more readable
 def _REMAINDER_LOOP(body):
     return f"""\
-for(std::size_t idx = vec_size; idx < size; ++idx) {{
+for(std::size_t idx = vec_remainder_size; idx < size; ++idx) {{
 {_tab_indent(body)}
 }}"""
 
 
-def _UNROLL_2(UNROLL_BODY):
-    return f"""\
-// Begin unrolled
-{UNROLL_BODY(0)}
+def _UNROLL(UNROLL_BODY, n_unroll):
+    out = "// Begin unrolled\n"
+    for i in range(n_unroll):
+        out += f"// Loop #{i}\n{UNROLL_BODY(i)}\n"
+    out += "// End unrolled\n"
+    return out
 
-{UNROLL_BODY(1)}
-// End unrolled"""
 
-
-def _MAKE_STD_VEC_LOOP(SETUP, BODY):
+def _MAKE_STD_VEC_LOOP(SETUP, BODY, n_unroll):
     return f"""\
 // Begin SETUP
-{_UNROLL_2(SETUP)}
+{_UNROLL(SETUP, n_unroll)}
 // End SETUP
 
 // Begin VECTOR LOOP
 std::size_t inc = batch_type::size;
-std::size_t loop_iter = inc * 2;
+std::size_t loop_iter = inc * {n_unroll};
 std::size_t vec_size = size - size % loop_iter;
+std::size_t vec_remainder_size = size - size % inc;
 for(std::size_t idx = 0; idx < vec_size; idx += loop_iter) {{
-{indent(_UNROLL_2(BODY), PY_TAB)}
+{indent(_UNROLL(BODY, n_unroll), PY_TAB)}
+}}
+for(std::size_t idx = vec_size; idx < vec_remainder_size; idx += inc) {{
+{indent(BODY(0), PY_TAB)}
 }}
 // End VECTOR LOOP"""
 
@@ -201,7 +206,9 @@ def gen_from_config(config, target_arch):
             additional_args,
             metric.upper(),
             _tab_indent(spec["SETUP"] if spec["SETUP"] else ""),
-            _tab_indent(_MAKE_STD_VEC_LOOP(setup_func, body_func)),
+            _tab_indent(
+                _MAKE_STD_VEC_LOOP(setup_func, body_func, int(spec["N_UNROLL"]))
+            ),
             _tab_indent(spec["REDUCTION"]),
             _tab_indent(_REMAINDER_LOOP(spec["REMAINDER"])),
             indent(spec["OUT"], PY_TAB),

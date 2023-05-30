@@ -7,7 +7,14 @@ import pytest
 # Note we use `p` to test for the usual minkowski, and `minkowski` to instead
 # test for the weighted minkowski metric since `wminkowski` is an entirely
 # separate metric.
-IMPLEMENTED_METRICS = ("euclidean", "manhattan", "chebyshev", "minkowski", "p")
+IMPLEMENTED_METRICS = (
+    "euclidean",
+    "manhattan",
+    "chebyshev",
+    "minkowski",
+    "p",
+    "seuclidean",
+)
 DISTANCE_METRIC_SK = {
     "64": DistanceMetric,
     "32": DistanceMetric32,
@@ -17,13 +24,14 @@ DISTANCE_METRIC_SK = {
 @pytest.mark.parametrize("metric", IMPLEMENTED_METRICS)
 @pytest.mark.parametrize("bit_width", ("32", "64"))
 def test_metric_matches(metric, bit_width):
+    rng = np.random.default_rng(42)
     n_samples = 300
     n_features = 200
     metric_kwargs = {
         "p": {"p": 14},
-        "minkowski": {"p": 3, "w": np.ones((n_features,)) * 5},
+        "minkowski": {"p": 3, "w": rng.uniform(1, 10, size=(n_features))},
+        "seuclidean": {"V": rng.uniform(1, 10, size=(n_features))},
     }.get(metric, {})
-    rng = np.random.default_rng(42)
     data_dtype = np.float32 if bit_width == "32" else np.float64
     X = rng.random(size=(n_samples, n_features), dtype=data_dtype)
 
