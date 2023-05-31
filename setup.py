@@ -15,15 +15,15 @@ from setuptools import Command, Extension, setup
 from setuptools.command.build_ext import build_ext as _build_ext
 from sklearn._build_utils import _check_cython_version  # noqa
 from sklearn.externals._packaging.version import parse as parse_version  # noqa
-from distance_metrics._generate import generate_code, GENERATED_DIR
+from slsdm._generate import generate_code, GENERATED_DIR
 import traceback
 import importlib
 from collections import defaultdict
 import contextlib
 
 VERSION = 0.1
-SRC_NAME = "distance_metrics"
-DISTNAME = "distmetric-xsimd"
+SRC_NAME = "slsdm"
+DISTNAME = "slsdm"
 DESCRIPTION = "A set of SIMD-accelerated DistanceMetric implementations"
 with open("README.md") as f:
     LONG_DESCRIPTION = f.read()
@@ -198,7 +198,7 @@ def build_extension_config():
     srcs = ["_dist_metrics.pyx.tp", "_dist_metrics.pxd", "src/_dist_optim.cpp"]
     srcs += [
         "/".join(GENERATED_DIR.split("/")[1:]) + os.path.basename(p)
-        for p in glob.glob("distance_metrics/src/generated/*.cpp")
+        for p in glob.glob(f"{SRC_NAME}/src/generated/*.cpp")
     ]
     extension_config = {
         SRC_NAME: [

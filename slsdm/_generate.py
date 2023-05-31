@@ -5,8 +5,8 @@ from pathlib import Path
 import io
 
 PY_TAB = "    "
-GENERATED_DIR = "distance_metrics/src/generated/"
-DEFINITIONS_DIR = "distance_metrics/definitions/"
+GENERATED_DIR = "slsdm/src/generated/"
+DEFINITIONS_DIR = "slsdm/definitions/"
 VECTOR_UNROLL_FACTOR = 4
 
 # XXX: Is there a nicer, more user-friendly approach towards
