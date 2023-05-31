@@ -1,4 +1,4 @@
-from distance_metrics import get_distance_metric
+from slsdm import get_distance_metric
 from sklearn.metrics._dist_metrics import DistanceMetric, DistanceMetric32
 import numpy as np
 from numpy.testing import assert_allclose

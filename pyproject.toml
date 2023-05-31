@@ -46,6 +46,6 @@ ignore = [
 # Exclude files are generated from tempita templates
 exclude= '''
 (
-    distance_metrics/_dist_metrics.pyx
+    slsdm/_dist_metrics.pyx
 )
 '''
