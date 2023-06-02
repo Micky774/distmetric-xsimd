@@ -1,5 +1,5 @@
 N_UNROLL
-4
+2
 
 SETUP_UNROLL
 batch_type simd_x_##ITER;
@@ -14,8 +14,6 @@ sum_##ITER += xs::fabs(simd_x_##ITER - simd_y_##ITER);
 REDUCTION
 // Reduction
 sum_0 += sum_1;
-sum_2 += sum_3;
-sum_0 += sum_2;
 batch_type batch_sum = xs::reduce_add(sum_0);
 double scalar_sum = *(Type*)&batch_sum;
 
