@@ -254,6 +254,7 @@ def cythonize_extensions(extension):
     return cythonize(
         extension,
         nthreads=n_jobs,
+        force=True,
         compiler_directives=compiler_directives,
     )
 
