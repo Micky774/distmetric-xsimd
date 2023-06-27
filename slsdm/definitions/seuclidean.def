@@ -1,3 +1,6 @@
+DIST_TYPE
+rdist
+
 N_UNROLL
 2
 

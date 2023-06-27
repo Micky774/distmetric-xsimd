@@ -5,6 +5,7 @@ from pathlib import Path
 import io
 
 PY_TAB = "    "
+SRC_DIR = "slsdm/src/"
 GENERATED_DIR = "slsdm/src/generated/"
 DEFINITIONS_DIR = "slsdm/definitions/"
 VECTOR_UNROLL_FACTOR = 4
@@ -99,6 +100,7 @@ def _pprint_config(config):
 
 def get_config():
     SECTIONS = (
+        "DIST_TYPE",
         "N_UNROLL",
         "ARGS",
         "SETUP",
@@ -172,7 +174,7 @@ def gen_from_config(config, target_arch):
     ARCHITECTURES = _make_architectures(target_arch)
     print(f"Generating the following SIMD targets: {ARCHITECTURES}\n")
 
-    file_template = dedent("""\
+    FILE_TEMPLATE = dedent("""\
         #ifndef {2}_HPP
         #define {2}_HPP
         #include "utils.hpp"
@@ -194,14 +196,41 @@ def gen_from_config(config, target_arch):
         {7}
         }}
         """)  # noqa
-    signature_template = "template " + io.StringIO(file_template).readlines()[
-        10
-    ].replace("operator()(Arch", "operator()<xs::{2}, Type>(xs::{2}")
-    for metric, spec in config.items():
+
+    xsimd_archs = ""
+    for arch in ARCHITECTURES:
+        xsimd_archs += f"xs::{arch}, "
+    xsimd_archs = xsimd_archs[:-2]
+
+    optim_file = dedent(f"""\
+        #include "utils.hpp"
+
+        using ARCH_LIST = xs::arch_list<{xsimd_archs}>;
+
+        // These must match the functions imported in _dist_metrics.pxd.tp
+        // ===============================================================
+
+        """)
+
+    def _write_arch_specialization(metric, arch, signature_template, additional_args):
+        file_path = join(GENERATED_DIR, f"{metric}_{arch}.cpp")
+        arch_specialized_template = """#include "{0}.hpp"\n"""
+        for _type in ("float", "double"):
+            signature = (
+                signature_template.format(metric, additional_args, arch)
+                .replace("Type", _type)
+                .replace("{", ";")
+            )
+            arch_specialized_template += signature
+        with open(file_path, "w") as file:
+            file.write(arch_specialized_template.format(metric))
+        return "extern " + signature
+
+    def _specialize_file_content(metric, spec):
         setup_func = lambda n: _make_parseable(spec["SETUP_UNROLL"]).format(n)
         body_func = lambda n: _make_parseable(spec["BODY"]).format(n)
         additional_args = ", " + spec["ARGS"] if spec["ARGS"] else ""
-        file_content = file_template.format(
+        file_content = FILE_TEMPLATE.format(
             metric,
             additional_args,
             metric.upper(),
@@ -213,25 +242,36 @@ def gen_from_config(config, target_arch):
             _tab_indent(_REMAINDER_LOOP(spec["REMAINDER"])),
             indent(spec["OUT"], PY_TAB),
         )
+        return file_content, additional_args
+
+    signature_template = (
+        "template " + io.StringIO(FILE_TEMPLATE).readlines()[10]
+    ).replace("operator()(Arch", "operator()<xs::{2}, Type>(xs::{2}")
+
+    for metric, spec in config.items():
+        optim_file += dedent(f"""\
+            #include "generated/{metric}.hpp"
+            template<typename Type>
+            auto xsimd_{metric}_{spec["DIST_TYPE"]} = xs::dispatch<ARCH_LIST>(_{metric}{{}});
+
+            """)  # noqa
+        file_content, additional_args = _specialize_file_content(metric, spec)
 
         for arch in ARCHITECTURES:
-            file_path = join(GENERATED_DIR, f"{metric}_{arch}.cpp")
-            target_specific_template = """#include "{0}.hpp"\n"""
-            for _type in ("float", "double"):
-                signature = (
-                    signature_template.format(metric, additional_args, arch)
-                    .replace("Type", _type)
-                    .replace("{", ";")
-                )
-                target_specific_template += signature
-                file_content += "extern " + signature
-            with open(file_path, "w") as file:
-                file.write(target_specific_template.format(metric))
+            # Keep track of extern statements as we write specializations
+            file_content += _write_arch_specialization(
+                metric, arch, signature_template, additional_args
+            )
 
+        file_content += f"#else\n#endif /* {metric.upper()}_HPP */"
         file_path = join(GENERATED_DIR, f"{metric}.hpp")
-        file_content += "#else\n#endif /* {metric.upper()}_HPP */"
         with open(file_path, "w") as file:
             file.write(file_content)
+
+    file_path = join(SRC_DIR, "_dist_optim.cpp")
+    print(f"DEBUG *** \n\n {file_path=}")
+    with open(file_path, "w") as file:
+        file.write(optim_file)
 
 
 def _tab_indent(str):
