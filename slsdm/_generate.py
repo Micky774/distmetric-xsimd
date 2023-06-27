@@ -5,7 +5,6 @@ from pathlib import Path
 import io
 
 PY_TAB = "    "
-SRC_DIR = "slsdm/src/"
 GENERATED_DIR = "slsdm/src/generated/"
 DEFINITIONS_DIR = "slsdm/definitions/"
 VECTOR_UNROLL_FACTOR = 4
@@ -15,64 +14,65 @@ VECTOR_UNROLL_FACTOR = 4
 # TODO: Add documentation regarding instruction priorities/ordering
 # All SIMD instructions supported by xsimd
 _x86 = [
-    "sse2",
-    "sse3",
-    "ssse3",
-    "sse4_1",
-    "sse4_2",
-    "fma3<xs::sse4_2>",
-    "avx",
-    "fma3<xs::avx>",
-    "avx2",
-    "fma3<xs::avx2>",
-    "fma4",
-    "avx512f",
-    "avx512cd",
-    "avx512dq",
     "avx512bw",
+    "avx512dq",
+    "avx512cd",
+    "avx512f",
+    "fma4",
+    "fma3<xs::avx2>",
+    "avx2",
+    "fma3<xs::avx>",
+    "avx",
+    "fma3<xs::sse4_2>",
+    "sse4_2",
+    "sse4_1",
+    "ssse3",
+    "sse3",
+    "sse2",
 ]
-_ARM = [
-    "neon",
-    "neon64",
-]
+
+
+def _parse_arch_flag(arch):
+    if "fma3" in arch:
+        return "fma"
+    if "fma4" in arch:
+        return "fma4"
+    return arch.replace("_", ".")
 
 
 def _get_arch_id(target_arch):
-    target_system = None
-    for _ARCH in (_x86, _ARM):
-        try:
-            target_arch_idx = _ARCH.index(target_arch)
-            target_system = _ARCH
-        except ValueError:
-            pass
-    if target_system is None:
+    try:
+        target_arch_idx = _x86.index(target_arch)
+    except ValueError:
         raise ValueError(
             f"Unknown target architecture '{target_arch}' provided; please choose from"
-            f" {_x86} for x86 systems, and {_ARM} for ARM systems."
+            f" {_x86} for x86 systems. Note we do not currently support ARM systems."
         )
-    return target_arch_idx, target_system
+    return target_arch_idx
 
 
 def _parse_spec(spec, arch):
-    target_arch_idx, target_system = _get_arch_id(arch)
-    out = set()
+    target_arch_idx = _get_arch_id(arch)
+    # We use a dict with empty values to preserve uniqueness and order of keys
+    out = {}
 
     if "<" in spec:
         fma_version = arch[3] if (len(arch) > 3 and arch[:3] == "fma") else -1
-        for a in target_system[:target_arch_idx]:
+        for a in _x86[target_arch_idx:]:
             # Ensure unsupported/mutually-exclusive FMA features are not enabled
             if "fma" not in a or a[3] == fma_version:
-                out |= {a}
+                out |= {a: None}
     if "<=" in spec or not spec:
-        out |= {target_system[target_arch_idx]}
+        out |= {_x86[target_arch_idx]: None}
     if "!" in spec:
-        out -= {target_system[target_arch_idx]}
+        out -= {_x86[target_arch_idx]: None}
     return out
 
 
 def _make_architectures(target_archs):
+    print(f"DEBUG *** {target_archs=}")
     SPECIFIERS = ["<=", "<", "!"]
-    out = set()
+    out = {}
     for config in target_archs.split(","):
         config = config.strip()
         spec = ""
@@ -197,9 +197,12 @@ def gen_from_config(config, target_arch):
         }}
         """)  # noqa
 
+    feature_flags = []
     xsimd_archs = ""
     for arch in ARCHITECTURES:
         xsimd_archs += f"xs::{arch}, "
+        flag = f"-m{_parse_arch_flag(arch)}"
+        feature_flags.append(flag)
     xsimd_archs = xsimd_archs[:-2]
 
     optim_file = dedent(f"""\
@@ -250,7 +253,7 @@ def gen_from_config(config, target_arch):
 
     for metric, spec in config.items():
         optim_file += dedent(f"""\
-            #include "generated/{metric}.hpp"
+            #include "{metric}.hpp"
             template<typename Type>
             auto xsimd_{metric}_{spec["DIST_TYPE"]} = xs::dispatch<ARCH_LIST>(_{metric}{{}});
 
@@ -268,10 +271,11 @@ def gen_from_config(config, target_arch):
         with open(file_path, "w") as file:
             file.write(file_content)
 
-    file_path = join(SRC_DIR, "_dist_optim.cpp")
-    print(f"DEBUG *** \n\n {file_path=}")
+    file_path = join(GENERATED_DIR, "_dist_optim.cpp")
     with open(file_path, "w") as file:
         file.write(optim_file)
+
+    return feature_flags
 
 
 def _tab_indent(str):
@@ -293,4 +297,4 @@ def generate_code(target_arch):
     # actually require to be regenerated, or an environment flag specifying
     # such has been set.
     Path(GENERATED_DIR).mkdir(parents=True, exist_ok=True)
-    gen_from_config(get_config(), target_arch)
+    return gen_from_config(get_config(), target_arch)
