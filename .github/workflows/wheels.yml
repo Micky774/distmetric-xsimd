@@ -23,7 +23,7 @@ jobs:
         run: python -m pip install cibuildwheel==2.13.1
 
       - name: Install scikit-learn
-        run: PIP_EXTRA_INDEX_URL=https://pypi.anaconda.org/scipy-wheels-nightly/simple python -m pip install sklearn
+        run: PIP_EXTRA_INDEX_URL=https://pypi.anaconda.org/scipy-wheels-nightly/simple python -m pip install scikit-learn
 
       - name: Build wheels
         env:
