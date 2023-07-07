@@ -12,7 +12,6 @@ jobs:
     strategy:
       matrix:
         os: [ubuntu-20.04, windows-2019, macOS-11]
-        python: [39]
 
     steps:
       - uses: actions/checkout@v3
@@ -26,6 +25,7 @@ jobs:
       - name: Build wheels
         env:
           CIBW_ENVIRONMENT: SLSDM_SIMD_ARCH='<=sse3'
+          CIBW_BUILD: cp39*
         run: python -m cibuildwheel --output-dir wheelhouse
 
       - uses: actions/upload-artifact@v3
