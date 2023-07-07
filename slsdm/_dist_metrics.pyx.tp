@@ -16,7 +16,7 @@ implementation_specific_values = [
     # The metric mapping is adapted accordingly to route to the correct
     # implementations.
     #
-    ('', 'float64_t', 'np.float64'),
+    ('64', 'float64_t', 'np.float64'),
     ('32', 'float32_t', 'np.float32')
 ]
 
@@ -648,10 +648,10 @@ cdef class MinkowskiDistance{{name_suffix}}(DistanceMetric{{name_suffix}}):
 {{endfor}}
 
 def get_distance_metric(x, metric, **kwargs):
-    MAPPING = METRIC_MAPPING if x.dtype == np.float64 else METRIC_MAPPING32
+    MAPPING = METRIC_MAPPING64 if x.dtype == np.float64 else METRIC_MAPPING32
     # Map the metric string ID to the metric class
     try:
         metric = MAPPING[metric]
     except:
-        raise ValueError(f"Unrecognized metric '{metric}'. Please select something from {METRIC_MAPPING.keys()}")
+        raise ValueError(f"Unrecognized metric '{metric}'. Please select something from {METRIC_MAPPING64.keys()}")
     return metric(**kwargs)
