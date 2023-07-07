@@ -1,6 +1,6 @@
 from sklearn.utils._typedefs cimport float64_t, float32_t, int32_t, intp_t
 
-cdef extern from "src/_dist_optim.cpp":
+cdef extern from "src/generated/_dist_optim.cpp":
     cdef bint HAS_SIMD
     cdef Type xsimd_manhattan_dist[Type](Type * x, Type * y, intp_t size) nogil
     cdef Type xsimd_euclidean_rdist[Type](Type * x, Type * y, intp_t size) nogil

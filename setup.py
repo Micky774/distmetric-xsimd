@@ -30,6 +30,7 @@ with open("README.md") as f:
 MAINTAINER = "Meekail Zain"
 MAINTAINER_EMAIL = "zainmeekail@gmail.com"
 LICENSE = "new BSD"
+FEATURE_FLAGS = ""
 
 _OPENMP_SUPPORTED = False
 
@@ -193,12 +194,13 @@ def build_extension_config():
     # Generate simd compilation targets from *.def files
 
     # TODO: Allow for more nuanced subset generation
-    target_arch = os.environ.get("SLSDM_SIMD_ARCH", "sse3")
-    generate_code(target_arch)
-    srcs = ["_dist_metrics.pyx.tp", "_dist_metrics.pxd", "src/_dist_optim.cpp"]
+    target_arch = os.environ.get("SLSDM_SIMD_ARCH", "<=sse3")
+    global FEATURE_FLAGS
+    FEATURE_FLAGS = generate_code(target_arch)
+    srcs = ["_dist_metrics.pyx.tp", "_dist_metrics.pxd"]
     srcs += [
         "/".join(GENERATED_DIR.split("/")[1:]) + os.path.basename(p)
-        for p in glob.glob(f"{SRC_NAME}/src/generated/*.cpp")
+        for p in glob.glob(join(GENERATED_DIR, "*.cpp"))
     ]
     extension_config = {
         SRC_NAME: [
@@ -254,6 +256,7 @@ def cythonize_extensions(extension):
     return cythonize(
         extension,
         nthreads=n_jobs,
+        force=True,
         compiler_directives=compiler_directives,
     )
 
@@ -287,7 +290,7 @@ def configure_extension_modules():
     # TODO: Update to explicitly use instructions up-to and including those
     # provided by the user when building, so as to avoid e.g. unintended
     # "promotions" of SSE3 instructions to AVX
-    march_flag = os.environ.get("SLSDM_MARCH", "native")
+    march_flag = os.environ.get("SLSDM_MARCH", "nocona")
     default_extra_compile_args = [f"-march={march_flag}"]
     build_with_debug_symbols = os.environ.get("SLSDM_ENABLE_DEBUG_SYMBOLS", "0") != "0"
     if os.name == "posix":
@@ -299,6 +302,7 @@ def configure_extension_modules():
 
     cython_exts = []
     extension_config = build_extension_config()
+    default_extra_compile_args.extend(FEATURE_FLAGS)
     for submodule, extensions in extension_config.items():
         submodule_parts = submodule.split(".")
         parent_dir = join(*submodule_parts)
@@ -417,6 +421,7 @@ def setup_package():
             key: tag_to_packages[key]
             for key in ["examples", "docs", "tests", "benchmark"]
         },
+        long_description_content_type="markdown",
     )
 
     arguments = [arg for arg in sys.argv[1:] if not arg.startswith("-")]
