@@ -70,7 +70,6 @@ def _parse_spec(spec, arch):
 
 
 def _make_architectures(target_archs):
-    print(f"DEBUG *** {target_archs=}")
     SPECIFIERS = ["<=", "<", "!"]
     out = {}
     for config in target_archs.split(","):
