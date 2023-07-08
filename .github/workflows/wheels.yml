@@ -28,8 +28,12 @@ jobs:
 
       - name: Build wheels
         env:
-          CONDA_HOME: /usr/local/minimamba
-        run: bash build_wheels.sh
+          CIBW_BUILD: cp39*
+        run: |
+          micromamba list
+          which python
+          python -m pip install cibuildwheel==2.13.1
+          python -m cibuildwheel --output-dir wheelhouse
 
       - uses: actions/upload-artifact@v3
         with:
