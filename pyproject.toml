@@ -52,23 +52,23 @@ exclude= '''
 
 [tool.cibuildwheel.linux]
 before-all = [
-    "git clone https://github.com/xtensor-stack/xsimd.git"
-    "cd xsimd"
-    "mkdir build"
-    "cd build"
-    "cmake .."
-    "make install"
+    "git clone https://github.com/xtensor-stack/xsimd.git",
+    "cd xsimd",
+    "mkdir build",
+    "cd build",
+    "cmake ..",
+    "make install",
     "cd ~"
 ]
 
 [tool.cibuildwheel.windows]
 before-all = [
-    "git clone https://github.com/xtensor-stack/xsimd.git"
-    "cd xsimd"
-    "mkdir build"
-    "cd build"
-    "cmake -G \"NMake Makefiles\" .."
-    "nmake"
-    "nmake install"
+    "git clone https://github.com/xtensor-stack/xsimd.git",
+    "cd xsimd",
+    "mkdir build",
+    "cd build",
+    "cmake -G \"NMake Makefiles\" ..",
+    "nmake",
+    "nmake install",
     "cd ~"
 ]
