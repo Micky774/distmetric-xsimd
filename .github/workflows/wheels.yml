@@ -24,7 +24,7 @@ jobs:
           python-version: "3.9"
 
       - name: Activate conda
-        run: source ~/.profile
+        run: source ~/.profile; conda list
 
       - name: Install cibuildwheel
         run: python -m pip install cibuildwheel==2.13.1
