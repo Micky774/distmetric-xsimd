@@ -22,15 +22,13 @@ jobs:
         with:
           micromamba-version: latest
           environment-name: build_env
-          init-shell: >-
-            bash
-            powershell
-          create-args: >-
-            python=3.9
-            xsimd=10.0.0
+          init-shell: bash powershell
+          create-args: python=3.9 xsimd=10.0.0
           post-cleanup: 'none'
 
       - name: Build wheels
+        env:
+          CONDA_HOME: /usr/local/minimamba
         run: bash build_wheels.sh
 
       - uses: actions/upload-artifact@v3
