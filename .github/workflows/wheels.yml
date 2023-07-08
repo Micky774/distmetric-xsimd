@@ -24,7 +24,7 @@ jobs:
           python-version: "3.9"
 
       - name: Init conda
-        run: conda init bash
+        run: conda init bash; source ~/.bashrc
 
       - name: Activate conda
         run: conda activate build_env
