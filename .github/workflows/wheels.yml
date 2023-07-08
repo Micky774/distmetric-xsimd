@@ -18,19 +18,21 @@ jobs:
     steps:
       - uses: actions/checkout@v3
 
-      - uses: mamba-org/setup-micromamba@v1
+      - uses: conda-incubator/setup-miniconda@v2
         with:
-          micromamba-version: latest
-          environment-name: build_env
-          init-shell: bash powershell
-          create-args: python=3.9 xsimd=10.0.0
-          post-cleanup: 'none'
+          python-version: 3.9
+          mamba-version: "*"
+          channels: conda-forge,defaults
+          channel-priority: true
+          activate-environment: build_env
+          environment-file: build_env.yml
 
       - name: Build wheels
         env:
           CIBW_BUILD: cp39*
+        shell: bash -el {0}
         run: |
-          micromamba list
+          conda list
           which python
           python -m pip install cibuildwheel==2.13.1
           python -m cibuildwheel --output-dir wheelhouse

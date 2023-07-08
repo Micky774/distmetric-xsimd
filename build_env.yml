@@ -1,0 +1,4 @@
+name: build_env
+dependencies:
+  - python=3.9
+  - xsimd=10.0.0
