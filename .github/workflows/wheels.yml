@@ -18,10 +18,11 @@ jobs:
     steps:
       - uses: actions/checkout@v3
 
-      - name: Setup Python
-        uses: actions/setup-python@v4
+      - uses: conda-incubator/setup-miniconda@v2
         with:
-          python-version: '3.9'  # update once build dependencies are available
+          activate-environment: build_env
+          auto-update-conda: true
+          python-version: "3.9"
 
       - name: Build wheels
         run: bash build_wheels.sh
