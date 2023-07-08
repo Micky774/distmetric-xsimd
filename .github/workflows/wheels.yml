@@ -23,20 +23,8 @@ jobs:
           auto-update-conda: true
           python-version: "3.9"
 
-      - name: Activate conda
-        run: source ~/.profile; conda list
-
-      - name: Install cibuildwheel
-        run: python3 -m pip install cibuildwheel==2.13.1
-
-      - name: Install xsimd
-        run: conda install xsimd
-
       - name: Build wheels
-        env:
-          CIBW_ENVIRONMENT: SLSDM_SIMD_ARCH='<=sse3'
-          CIBW_BUILD: cp39*
-        run: python3 -m cibuildwheel --output-dir wheelhouse
+        run: bash build_wheels.sh
 
       - uses: actions/upload-artifact@v3
         with:
