@@ -1,7 +1,7 @@
 #!/bin/bash
 
 source ~/.profile
-mamba list
+micromamba list
 which python
 python -m pip install cibuildwheel==2.13.1
 

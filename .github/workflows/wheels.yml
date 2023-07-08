@@ -21,6 +21,7 @@ jobs:
       - uses: mamba-org/setup-micromamba@v1
         with:
           micromamba-version: latest
+          environment-name: build_env
           init-shell: >-
             bash
             powershell
