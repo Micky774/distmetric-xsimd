@@ -18,19 +18,14 @@ jobs:
     steps:
       - uses: actions/checkout@v3
 
-      # - uses: conda-incubator/setup-miniconda@v2
-      #   with:
-      #     python-version: 3.9
-      #     mamba-version: "*"
-      #     channels: conda-forge,defaults
-      #     channel-priority: true
-      #     activate-environment: build_env
-      #     environment-file: build_env.yml
-
-      - name: Setup Python
-        uses: actions/setup-python@v4
+      - uses: conda-incubator/setup-miniconda@v2
         with:
-          python-version: '3.9'  # update once build dependencies are available
+          python-version: 3.9
+          mamba-version: "*"
+          channels: conda-forge,defaults
+          channel-priority: true
+          activate-environment: build_env
+          environment-file: build_env.yml
 
       - name: Build wheels
         env:
