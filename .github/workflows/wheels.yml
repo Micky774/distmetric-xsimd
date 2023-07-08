@@ -24,7 +24,6 @@ jobs:
           init-shell: >-
             bash
             powershell
-          cache-environment: true
           create-args: >-
             python=3.9
             xsimd=10.0.0
