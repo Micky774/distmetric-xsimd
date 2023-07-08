@@ -18,6 +18,20 @@ jobs:
     steps:
       - uses: actions/checkout@v3
 
+      - uses: mamba-org/setup-micromamba@v1
+        with:
+          micromamba-version: latest
+          environment-file: environment.yml
+          init-shell: >-
+            bash
+            powershell
+          cache-environment: true
+          create-args: >-
+            python=3.9
+            xsimd=10.0.0
+          post-cleanup: 'none'
+
+
       - uses: conda-incubator/setup-miniconda@v2
         with:
           activate-environment: build_env

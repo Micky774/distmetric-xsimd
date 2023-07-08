@@ -1,8 +1,7 @@
 #!/bin/bash
 
 source ~/.profile
-conda install xsimd
-conda list
+mamba list
 which python
 python -m pip install cibuildwheel==2.13.1
 
