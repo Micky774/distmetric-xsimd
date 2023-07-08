@@ -23,6 +23,9 @@ jobs:
           auto-update-conda: true
           python-version: "3.9"
 
+      - name: Init conda
+        run: conda init bash
+
       - name: Activate conda
         run: conda activate build_env
 
