@@ -20,7 +20,7 @@ cdef extern from *:
         // Print standard output
         // on the screen
         cout << "The best architecture supported by this machine is: "\
-        << xsimd::best_arch::name();
+        << xsimd::default_arch::name();
         return;
     }
     """
