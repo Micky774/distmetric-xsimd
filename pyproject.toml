@@ -49,26 +49,3 @@ exclude= '''
     slsdm/_dist_metrics.pyx
 )
 '''
-
-[tool.cibuildwheel.linux]
-before-all = [
-    "git clone https://github.com/xtensor-stack/xsimd.git",
-    "cd xsimd",
-    "mkdir build",
-    "cd build",
-    "cmake ..",
-    "make install",
-    "cd ~"
-]
-
-[tool.cibuildwheel.windows]
-before-all = [
-    "git clone https://github.com/xtensor-stack/xsimd.git",
-    "cd xsimd",
-    "mkdir build",
-    "cd build",
-    "cmake -G \"NMake Makefiles\" ..",
-    "nmake",
-    "nmake install",
-    "cd ~"
-]
