@@ -263,8 +263,8 @@ def configure_extension_modules():
     # TODO: Update to explicitly use instructions up-to and including those
     # provided by the user when building, so as to avoid e.g. unintended
     # "promotions" of SSE3 instructions to AVX
-    march_flag = os.environ.get("SLSDM_MARCH", "nocona")
-    default_extra_compile_args = [f"-march={march_flag}"]
+    march_flag = os.environ.get("SLSDM_MARCH", None)
+    default_extra_compile_args = [f"-march={march_flag}"] if march_flag is not None else []
     build_with_debug_symbols = os.environ.get("SLSDM_ENABLE_DEBUG_SYMBOLS", "0") != "0"
     if os.name == "posix":
         if build_with_debug_symbols:
