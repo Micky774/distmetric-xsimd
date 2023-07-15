@@ -208,6 +208,8 @@ def build_extension_config():
                 "sources": srcs,
                 "language": "c++",
                 "include_dirs": ["src/", "../xsimd/include/"],
+                "extra_compile_args":["-std=c++11"],
+                "extra_link_args":["-std=c++11"],
             },
         ],
     }
