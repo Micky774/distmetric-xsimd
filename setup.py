@@ -32,8 +32,6 @@ MAINTAINER_EMAIL = "zainmeekail@gmail.com"
 LICENSE = "new BSD"
 FEATURE_FLAGS = ""
 
-_OPENMP_SUPPORTED = False
-
 PYTEST_MIN_VERSION = "5.4.3"
 CYTHON_MIN_VERSION = "0.29.33"
 SKLEARN_MIN_VERSION = "1.3.dev0"
@@ -83,19 +81,6 @@ class build_ext(_build_ext):
                 self.parallel = int(parallel)
         if self.parallel:
             print("setting parallel=%d " % self.parallel)
-
-    def build_extensions(self):
-        from sklearn._build_utils.openmp_helpers import get_openmp_flag
-
-        global _OPENMP_SUPPORTED
-        if _OPENMP_SUPPORTED:
-            openmp_flag = get_openmp_flag()
-
-            for e in self.extensions:
-                e.extra_compile_args += openmp_flag
-                e.extra_link_args += openmp_flag
-
-        _build_ext.build_extensions(self)
 
     def run(self):
         # Specifying `build_clib` allows running `python setup.py develop`
@@ -220,20 +205,6 @@ def cythonize_extensions(extension):
     """Check that a recent Cython is available and cythonize extensions"""
     _check_cython_version()
     from Cython.Build import cythonize
-    from sklearn._build_utils.pre_build_helpers import basic_check_build
-    from sklearn._build_utils.openmp_helpers import check_openmp_support
-
-    # Fast fail before cythonization if compiler fails compiling basic test
-    # code even without OpenMP
-    basic_check_build()
-
-    # check simple compilation with OpenMP. If it fails slsdm will be
-    # built without OpenMP.
-    # `check_openmp_support` compiles a small test program to see if the
-    # compilers are properly configured to build with OpenMP. This is expensive
-    # and we only want to call this function once.
-    global _OPENMP_SUPPORTED
-    _OPENMP_SUPPORTED = False
 
     n_jobs = 1
     with contextlib.suppress(ImportError):
