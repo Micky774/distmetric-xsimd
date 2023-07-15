@@ -231,7 +231,7 @@ def cythonize_extensions(extension):
     # compilers are properly configured to build with OpenMP. This is expensive
     # and we only want to call this function once.
     global _OPENMP_SUPPORTED
-    _OPENMP_SUPPORTED = check_openmp_support()
+    _OPENMP_SUPPORTED = False
 
     n_jobs = 1
     with contextlib.suppress(ImportError):

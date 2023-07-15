@@ -31,6 +31,8 @@ jobs:
         env:
           CIBW_BUILD: cp39*
           CIBW_ARCH: native
+          # Skip 32-bit builds
+          CIBW_SKIP: "*-win32 *-manylinux_i686"
 
       - uses: actions/upload-artifact@v3
         with:
