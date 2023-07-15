@@ -30,7 +30,6 @@ jobs:
         env:
           CIBW_BUILD: cp39*
           CIBW_ARCH: native
-        shell: bash -el {0}
         run: |
           which python
           python -m pip install cibuildwheel==2.13.1
