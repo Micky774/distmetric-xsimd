@@ -29,10 +29,11 @@ jobs:
       - name: Build wheels
         uses: pypa/cibuildwheel@v2.14.1
         env:
-          CIBW_BUILD: cp39*
+          CIBW_BUILD: cp3[8-9]* cp31*
           CIBW_ARCH: native
           # TODO: Add arm64 support for MacOS
           CIBW_ARCHS_MACOS: x86_64
+          # TODO: Add support for windows
           # Skip 32-bit builds and musllinux
           CIBW_SKIP: "*-win32 *-manylinux_i686 *musllinux*"
 
@@ -62,7 +63,7 @@ jobs:
     permissions:
       id-token: write
     runs-on: ubuntu-latest
-    # if: github.event_name = 'workflow_dispatch' || github.event_name == 'release' && github.event.action == 'published' 
+    if: github.event_name == 'workflow_dispatch' || github.event_name == 'release' && github.event.action == 'published'
     steps:
     - uses: actions/download-artifact@v3
       with:
