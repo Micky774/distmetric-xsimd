@@ -83,7 +83,7 @@ def _make_architectures(target_archs):
                 arch = arch[len(spec) :]
                 break
 
-        out |= _parse_spec(spec, arch)
+        out.update(_parse_spec(spec, arch))
     return list(out)
 
 
