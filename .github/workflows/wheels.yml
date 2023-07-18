@@ -4,8 +4,6 @@ on:
   push:
     branches:
       - 'releases/**'
-      - 'test'
-      - 'vendored'
   workflow_dispatch:
 
 jobs:
