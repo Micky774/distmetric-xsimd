@@ -20,8 +20,9 @@ import traceback
 import importlib
 from collections import defaultdict
 import contextlib
+from slsdm import __version__
 
-VERSION = 0.1
+VERSION = __version__
 SRC_NAME = "slsdm"
 DISTNAME = "slsdm"
 DESCRIPTION = "A set of SIMD-accelerated DistanceMetric implementations"
@@ -352,9 +353,6 @@ def configure_extension_modules():
             )
             new_ext.define_macros.append(DEFINE_MACRO_NUMPY_C_API)
             cython_exts.append(new_ext)
-    print(f"DEGUG *** {cython_exts=}\n\n")
-    for ext in cython_exts:
-        print(f"DEBUG *** {ext.sources}")
     return cythonize_extensions(cython_exts)
 
 
