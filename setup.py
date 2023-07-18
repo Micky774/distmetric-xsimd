@@ -193,8 +193,8 @@ def build_extension_config():
                 "sources": srcs,
                 "language": "c++",
                 "include_dirs": ["src/", "../xsimd/include/"],
-                "extra_compile_args":["-std=c++14"],
-                "extra_link_args":["-std=c++14"],
+                "extra_compile_args": ["-std=c++14"],
+                "extra_link_args": ["-std=c++14"],
             },
         ],
     }
@@ -264,7 +264,9 @@ def configure_extension_modules():
     # provided by the user when building, so as to avoid e.g. unintended
     # "promotions" of SSE3 instructions to AVX
     march_flag = os.environ.get("SLSDM_MARCH", None)
-    default_extra_compile_args = [f"-march={march_flag}"] if march_flag is not None else []
+    default_extra_compile_args = (
+        [f"-march={march_flag}"] if march_flag is not None else []
+    )
     build_with_debug_symbols = os.environ.get("SLSDM_ENABLE_DEBUG_SYMBOLS", "0") != "0"
     if os.name == "posix":
         if build_with_debug_symbols:
@@ -291,7 +293,8 @@ def configure_extension_modules():
                 new_source_path, path_ext = os.path.splitext(source)
 
                 if path_ext != ".tp":
-                    sources.append(source)
+                    if path_ext != ".pxd":
+                        sources.append(source)
                     continue
 
                 # `source` is a Tempita file
@@ -349,7 +352,9 @@ def configure_extension_modules():
             )
             new_ext.define_macros.append(DEFINE_MACRO_NUMPY_C_API)
             cython_exts.append(new_ext)
-
+    print(f"DEGUG *** {cython_exts=}\n\n")
+    for ext in cython_exts:
+        print(f"DEBUG *** {ext.sources}")
     return cythonize_extensions(cython_exts)
 
 

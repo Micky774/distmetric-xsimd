@@ -6,6 +6,7 @@ on:
       - 'releases/**'
       - 'test'
       - 'vendored'
+  workflow_dispatch:
 
 jobs:
   build_wheels:
