@@ -20,8 +20,9 @@ import traceback
 import importlib
 from collections import defaultdict
 import contextlib
+from slsdm import __version__
 
-VERSION = 0.1
+VERSION = __version__
 SRC_NAME = "slsdm"
 DISTNAME = "slsdm"
 DESCRIPTION = "A set of SIMD-accelerated DistanceMetric implementations"
@@ -31,8 +32,6 @@ MAINTAINER = "Meekail Zain"
 MAINTAINER_EMAIL = "zainmeekail@gmail.com"
 LICENSE = "new BSD"
 FEATURE_FLAGS = ""
-
-_OPENMP_SUPPORTED = False
 
 PYTEST_MIN_VERSION = "5.4.3"
 CYTHON_MIN_VERSION = "0.29.33"
@@ -83,19 +82,6 @@ class build_ext(_build_ext):
                 self.parallel = int(parallel)
         if self.parallel:
             print("setting parallel=%d " % self.parallel)
-
-    def build_extensions(self):
-        from sklearn._build_utils.openmp_helpers import get_openmp_flag
-
-        global _OPENMP_SUPPORTED
-        if _OPENMP_SUPPORTED:
-            openmp_flag = get_openmp_flag()
-
-            for e in self.extensions:
-                e.extra_compile_args += openmp_flag
-                e.extra_link_args += openmp_flag
-
-        _build_ext.build_extensions(self)
 
     def run(self):
         # Specifying `build_clib` allows running `python setup.py develop`
@@ -207,7 +193,9 @@ def build_extension_config():
             {
                 "sources": srcs,
                 "language": "c++",
-                "include_dirs": ["src/"],
+                "include_dirs": ["src/", "../xsimd/include/"],
+                "extra_compile_args": ["-std=c++14"],
+                "extra_link_args": ["-std=c++14"],
             },
         ],
     }
@@ -218,20 +206,6 @@ def cythonize_extensions(extension):
     """Check that a recent Cython is available and cythonize extensions"""
     _check_cython_version()
     from Cython.Build import cythonize
-    from sklearn._build_utils.pre_build_helpers import basic_check_build
-    from sklearn._build_utils.openmp_helpers import check_openmp_support
-
-    # Fast fail before cythonization if compiler fails compiling basic test
-    # code even without OpenMP
-    basic_check_build()
-
-    # check simple compilation with OpenMP. If it fails slsdm will be
-    # built without OpenMP.
-    # `check_openmp_support` compiles a small test program to see if the
-    # compilers are properly configured to build with OpenMP. This is expensive
-    # and we only want to call this function once.
-    global _OPENMP_SUPPORTED
-    _OPENMP_SUPPORTED = check_openmp_support()
 
     n_jobs = 1
     with contextlib.suppress(ImportError):
@@ -290,8 +264,10 @@ def configure_extension_modules():
     # TODO: Update to explicitly use instructions up-to and including those
     # provided by the user when building, so as to avoid e.g. unintended
     # "promotions" of SSE3 instructions to AVX
-    march_flag = os.environ.get("SLSDM_MARCH", "nocona")
-    default_extra_compile_args = [f"-march={march_flag}"]
+    march_flag = os.environ.get("SLSDM_MARCH", None)
+    default_extra_compile_args = (
+        [f"-march={march_flag}"] if march_flag is not None else []
+    )
     build_with_debug_symbols = os.environ.get("SLSDM_ENABLE_DEBUG_SYMBOLS", "0") != "0"
     if os.name == "posix":
         if build_with_debug_symbols:
@@ -318,7 +294,8 @@ def configure_extension_modules():
                 new_source_path, path_ext = os.path.splitext(source)
 
                 if path_ext != ".tp":
-                    sources.append(source)
+                    if path_ext != ".pxd":
+                        sources.append(source)
                     continue
 
                 # `source` is a Tempita file
@@ -376,7 +353,6 @@ def configure_extension_modules():
             )
             new_ext.define_macros.append(DEFINE_MACRO_NUMPY_C_API)
             cython_exts.append(new_ext)
-
     return cythonize_extensions(cython_exts)
 
 

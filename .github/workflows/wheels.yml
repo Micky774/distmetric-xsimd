@@ -4,38 +4,74 @@ on:
   push:
     branches:
       - 'releases/**'
+  workflow_dispatch:
 
 jobs:
   build_wheels:
     name: Build wheels on ${{ matrix.os }}
     runs-on: ${{ matrix.os }}
     strategy:
+      fail-fast: false
       matrix:
-        os: [ubuntu-20.04, windows-2019, macOS-11]
+        os: [ubuntu-20.04, macOS-11]
 
     steps:
       - uses: actions/checkout@v3
-
-      - uses: conda-incubator/setup-miniconda@v2
         with:
-          auto-update-conda: true
-          python-version: "3.9"
+          submodules: true
 
-          # Used to host cibuildwheel
-      - uses: actions/setup-python@v3
-
-      - name: Install cibuildwheel
-        run: python -m pip install cibuildwheel==2.13.1
-
-      - name: Install xsimd
-        run: conda install xsimd
+      - name: Setup Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.9'  # update once build dependencies are available
 
       - name: Build wheels
+        uses: pypa/cibuildwheel@v2.14.1
         env:
-          CIBW_ENVIRONMENT: SLSDM_SIMD_ARCH='<=sse3'
-          CIBW_BUILD: cp39*
-        run: python -m cibuildwheel --output-dir wheelhouse
+          CIBW_BUILD: cp3[8-9]* cp31*
+          CIBW_ARCH: native
+          # TODO: Add arm64 support for MacOS
+          CIBW_ARCHS_MACOS: x86_64
+          CIBW_TEST_REQUIRES: pytest
+          CIBW_TEST_COMMAND: "pytest {project}/tests"
+          # TODO: Add support for windows
+          # Skip 32-bit builds and musllinux
+          CIBW_SKIP: "*-win32 *-manylinux_i686 *musllinux*"
 
       - uses: actions/upload-artifact@v3
         with:
           path: ./wheelhouse/*.whl
+
+  make_sdist:
+    name: Make SDist
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v3
+      with:
+        fetch-depth: 0  # Optional, use if you use setuptools_scm
+        submodules: true  # Optional, use if you have submodules
+
+    - name: Build SDist
+      run: pipx run build --sdist
+
+    - uses: actions/upload-artifact@v3
+      with:
+        path: dist/*.tar.gz
+
+  upload_all:
+    needs: [build_wheels, make_sdist]
+    environment: pypi
+    permissions:
+      id-token: write
+    runs-on: ubuntu-latest
+    if: github.event_name == 'workflow_dispatch' || github.event_name == 'release' && github.event.action == 'published'
+    steps:
+    - uses: actions/download-artifact@v3
+      with:
+        name: artifact
+        path: dist
+
+    - uses: pypa/gh-action-pypi-publish@release/v1
+      with:
+        password: ${{ secrets.TEST_PYPI_TOKEN }}
+        repository-url: https://test.pypi.org/legacy/

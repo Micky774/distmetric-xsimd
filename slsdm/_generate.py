@@ -61,11 +61,11 @@ def _parse_spec(spec, arch):
         for a in _x86[target_arch_idx:]:
             # Ensure unsupported/mutually-exclusive FMA features are not enabled
             if "fma" not in a or a[3] == fma_version:
-                out |= {a: None}
+                out[a] = None
     if "<=" in spec or not spec:
-        out |= {_x86[target_arch_idx]: None}
+        out[_x86[target_arch_idx]] = None
     if "!" in spec:
-        out -= {_x86[target_arch_idx]: None}
+        out.pop(_x86[target_arch_idx], None)
     return out
 
 
@@ -83,7 +83,7 @@ def _make_architectures(target_archs):
                 arch = arch[len(spec) :]
                 break
 
-        out |= _parse_spec(spec, arch)
+        out.update(_parse_spec(spec, arch))
     return list(out)
 
 
