@@ -8,6 +8,16 @@ def get_distance_metric(X, metric, **metric_kwargs):
         return None
 
 
-__version__ = "0.1.1"
+__version__ = "0.1.0"
 
-__all__ = ["get_distance_metric"]
+
+def get_best_arch():
+    try:
+        from ._dist_metrics import get_best_arch
+
+        return get_best_arch()
+    except ModuleNotFoundError:
+        return None
+
+
+__all__ = ["get_distance_metric", "get_best_arch"]

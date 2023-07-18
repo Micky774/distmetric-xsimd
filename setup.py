@@ -377,7 +377,7 @@ def setup_package():
             "Topic :: Software Development",
             "Topic :: Scientific/Engineering",
             "Development Status :: 2 - Pre-Alpha",
-            "Operating System :: Microsoft :: Windows",
+            # "Operating System :: Microsoft :: Windows",
             "Operating System :: POSIX",
             "Operating System :: Unix",
             "Operating System :: MacOS",
