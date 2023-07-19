@@ -9,8 +9,6 @@ GENERATED_DIR = "slsdm/src/generated/"
 DEFINITIONS_DIR = "slsdm/definitions/"
 VECTOR_UNROLL_FACTOR = 4
 
-# XXX: Is there a nicer, more user-friendly approach towards
-# FMA{3, 4} instructions?
 # TODO: Add documentation regarding instruction priorities/ordering
 # All SIMD instructions supported by xsimd
 _x86 = [
@@ -19,11 +17,8 @@ _x86 = [
     "avx512cd",
     "avx512f",
     "fma4",
-    "fma3<xs::avx2>",
     "avx2",
-    "fma3<xs::avx>",
     "avx",
-    "fma3<xs::sse4_2>",
     "sse4_2",
     "sse4_1",
     "ssse3",
@@ -51,27 +46,25 @@ def _get_arch_id(target_arch):
     return target_arch_idx
 
 
-def _parse_spec(spec, arch):
+def _parse_spec(spec, arch, cur_archs):
     target_arch_idx = _get_arch_id(arch)
-    # We use a dict with empty values to preserve uniqueness and order of keys
-    out = {}
-
     if "<" in spec:
         fma_version = arch[3] if (len(arch) > 3 and arch[:3] == "fma") else -1
         for a in _x86[target_arch_idx:]:
             # Ensure unsupported/mutually-exclusive FMA features are not enabled
             if "fma" not in a or a[3] == fma_version:
-                out[a] = None
-    if "<=" in spec or not spec:
-        out[_x86[target_arch_idx]] = None
-    if "!" in spec:
-        out.pop(_x86[target_arch_idx], None)
-    return out
+                cur_archs[a] = None
+    if spec == "<=" or not spec:
+        cur_archs[_x86[target_arch_idx]] = None
+    if spec == "~":
+        cur_archs.pop(_x86[target_arch_idx], None)
+    return cur_archs
 
 
 def _make_architectures(target_archs):
-    SPECIFIERS = ["<=", "<", "!"]
-    out = {}
+    SPECIFIERS = ["<=", "<", "~"]
+    cur_archs = {}
+    has_fma3 = False
     for config in target_archs.split(","):
         config = config.strip()
         spec = ""
@@ -82,9 +75,19 @@ def _make_architectures(target_archs):
                 spec = mark
                 arch = arch[len(spec) :]
                 break
+        if arch == "fma3":
+            has_fma3 = True
+        else:
+            _parse_spec(spec, arch, cur_archs)
+    cur_archs = list(cur_archs)
 
-        out.update(_parse_spec(spec, arch))
-    return list(out)
+    # Second pass to enable any compatible fma3 sets
+    if has_fma3:
+        for fma_compatible_arch in ("sse4_2", "avx", "avx2"):
+            if fma_compatible_arch in cur_archs:
+                cur_archs.append(f"fma3<xs::{fma_compatible_arch}>")
+
+    return cur_archs
 
 
 def _pprint_config(config):
