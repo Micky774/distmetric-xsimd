@@ -41,3 +41,5 @@ You may also prefer to specify features *up to*, and optionally including, a cer
 You can also disable specific features that would otherwise be enabled by your specification by prepending the `~` symbol to the specification token. For example, to build for `{SSE4_2, SSE4_1, SSE3, SSE2}`, one would specify `SLSDM_SIMD_ARCH="<=sse4_2, !ssse3"`. Note that the specification will be resolved in a left-to-right order, so `SLSDM_SIMD_ARCH="!ssse3, <=sse4_2"` would not produce equivalent results, and indeed still generates `SSSE3` instructions.
 
 To include `FMA3` combination instruction sets, include `fma3` in the `SLSDM_SIMD_ARCH` specification and any compatible instruction sets will automatically be enabled. For example, `SLSDM_SIMD_ARCH="fma3, <=avx"` will enable `{FMA3 + AVX, AVX, FMA3 + SSE4.2, SSE4.2, SSE4.1, SSSE3, SSE3, SSE2}`.
+
+**Warning**: Runtime dispatch is not yet correctly supported. When distributing to other machines, please build only with SIMD sets that all target machines support.
