@@ -35,7 +35,7 @@ FEATURE_FLAGS = ""
 
 PYTEST_MIN_VERSION = "5.4.3"
 CYTHON_MIN_VERSION = "0.29.33"
-SKLEARN_MIN_VERSION = "1.3.dev0"
+SKLEARN_MIN_VERSION = "1.3.0"
 
 # TODO: Enable and trim as needed
 # 'build' and 'install' is included to have structured metadata for CI.
