@@ -30,8 +30,6 @@ _x86 = [
 def _parse_arch_flag(arch):
     if "fma3" in arch:
         return "fma"
-    if "fma4" in arch:
-        return "fma4"
     return arch.replace("_", ".")
 
 
