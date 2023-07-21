@@ -180,7 +180,7 @@ def build_extension_config():
     # Generate simd compilation targets from *.def files
 
     # TODO: Allow for more nuanced subset generation
-    target_arch = os.environ.get("SLSDM_SIMD_ARCH", "<=sse3")
+    target_arch = os.environ.get("SLSDM_SIMD_ARCH", "<=avx")
     global FEATURE_FLAGS
     FEATURE_FLAGS = generate_code(target_arch)
     srcs = ["_dist_metrics.pyx.tp", "_dist_metrics.pxd"]
