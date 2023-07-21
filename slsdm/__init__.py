@@ -8,7 +8,7 @@ def get_distance_metric(X, metric, **metric_kwargs):
         return None
 
 
-__version__ = "0.1.0"
+__version__ = "0.2.0"
 
 
 def get_best_arch():
