@@ -44,22 +44,11 @@ SKLEARN_MIN_VERSION = "1.3.0"
 dependent_packages = {
     "scikit-learn": (SKLEARN_MIN_VERSION, "install"),
     "cython": (CYTHON_MIN_VERSION, "build"),
-    # "matplotlib": ("3.1.3", "docs, examples, tests"),
-    # "pandas": ("1.0.5", "benchmark, docs, examples, tests"),
-    # "seaborn": ("0.9.0", "docs, examples"),
     "pytest": (PYTEST_MIN_VERSION, "tests"),
     "pytest-cov": ("2.9.0", "tests"),
     "flake8": ("3.8.2", "tests"),
     "black": ("23.3.0", "tests"),
     "mypy": ("0.961", "tests"),
-    # "sphinx": ("4.0.1", "docs"),
-    # "sphinx-gallery": ("0.7.0", "docs"),
-    # "numpydoc": ("1.2.0", "docs, tests"),
-    # "Pillow": ("7.1.2", "docs"),
-    # "plotly": ("5.10.0", "docs, examples"),
-    # XXX: Pin conda-lock to the latest released version (needs manual update
-    # from time to time)
-    # "conda-lock": ("1.4.0", "maintenance"),
 }
 
 
@@ -178,8 +167,6 @@ def build_extension_config():
     # TODO: Filter to only generate files that are either missing or have had
     # their corresponding *.def files altered.
     # Generate simd compilation targets from *.def files
-
-    # TODO: Allow for more nuanced subset generation
     target_arch = os.environ.get("SLSDM_SIMD_ARCH", "<=avx")
     global FEATURE_FLAGS
     FEATURE_FLAGS = generate_code(target_arch)
@@ -261,9 +248,9 @@ def configure_extension_modules():
         default_libraries = []
 
     # Necessary to generate necessary SIMD instructions
-    # TODO: Update to explicitly use instructions up-to and including those
-    # provided by the user when building, so as to avoid e.g. unintended
-    # "promotions" of SSE3 instructions to AVX
+    # TODO: Update to compile each compilation unit separately using the
+    # required flags, in order to avoid accidental vector promotion
+    # (e.g SSE3->AVX)
     march_flag = os.environ.get("SLSDM_MARCH", None)
     default_extra_compile_args = (
         [f"-march={march_flag}"] if march_flag is not None else []
