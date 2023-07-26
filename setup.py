@@ -229,10 +229,6 @@ def build_extension_config():
         "_dist_metrics.pxd",
         join(GENERATED_DIR[6:], "_dist_optim.cpp"),
     ]
-    # srcs += [
-    #     "/".join(GENERATED_DIR.split("/")[1:]) + os.path.basename(p)
-    #     for p in glob.glob(join(GENERATED_DIR, "*.cpp"))
-    # ]
     extension_config = {
         SRC_NAME: [
             {
@@ -298,7 +294,7 @@ def configure_extension_modules():
 
     is_pypy = platform.python_implementation() == "PyPy"
     np_include = numpy.get_include()
-    default_optimization_level = "O1"
+    default_optimization_level = "O3"
 
     if os.name == "posix":
         default_libraries = ["m"]
