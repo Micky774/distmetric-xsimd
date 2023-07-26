@@ -178,13 +178,10 @@ def _parse_arch_to_flag(arch, compiler="gcc"):
     if compiler == "gcc":
         if "fma3" in arch:
             flags.append("-mfma3")
-            arch = arch[5:].replace("_", ".")
-            for flag in (arch, *REQUIRED_FLAGS[arch]):
-                flags.append("-m" + flag)
-        else:
-            arch = arch.replace("_", ".")
-            for flag in (arch, *REQUIRED_FLAGS[arch]):
-                flags.append("-m" + flag)
+            arch = arch[5:]
+        arch = arch.replace("_", ".")
+        for flag in (arch, *REQUIRED_FLAGS[arch]):
+            flags.append("-m" + flag)
     else:
         raise ValueError("Only gcc is currently supported.")
     return flags
