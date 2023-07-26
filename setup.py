@@ -177,7 +177,7 @@ def _parse_arch_to_flag(arch, compiler="gcc"):
     flags = []
     if compiler == "gcc":
         if "fma3" in arch:
-            flags.append("-mfma3")
+            flags.append("-mfma")
             arch = arch[5:]
         arch = arch.replace("_", ".")
         for flag in (arch, *REQUIRED_FLAGS[arch]):
@@ -278,7 +278,7 @@ def configure_extension_modules():
     # C/C++ files in the release tarballs as they are not necessarily
     # forward compatible with future versions of Python for instance.
     if "sdist" in sys.argv or "--help" in sys.argv:
-        return []
+        return [], None, None
 
     # Always use NumPy 1.7 C API for all compiled extensions.
     # See: https://numpy.org/doc/stable/reference/c-api/deprecations.html
@@ -449,8 +449,10 @@ def setup_package():
         check_package_status("sklearn", SKLEARN_MIN_VERSION)
 
         _check_cython_version()
-        metadata["ext_modules"], metrics, xsimd_archs = configure_extension_modules()
-        metadata["libraries"] = _make_library_config(metrics, xsimd_archs)
+        ext_modules, metrics, xsimd_archs = configure_extension_modules()
+        metadata["ext_modules"] = ext_modules
+        if metrics is not None and xsimd_archs is not None:
+            metadata["libraries"] = _make_library_config(metrics, xsimd_archs)
     setup(**metadata)
 
 
