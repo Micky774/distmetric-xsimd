@@ -5,7 +5,7 @@ from pathlib import Path
 import io
 
 PY_TAB = "    "
-GENERATED_DIR = "slsdm/src/generated/"
+GENERATED_DIR = "slsdm/src/_src/generated/"
 DEFINITIONS_DIR = "slsdm/definitions/"
 VECTOR_UNROLL_FACTOR = 4
 
@@ -25,12 +25,6 @@ _x86 = [
     "sse3",
     "sse2",
 ]
-
-
-def _parse_arch_flag(arch):
-    if "fma3" in arch:
-        return "fma"
-    return arch.replace("_", ".")
 
 
 def _get_arch_id(target_arch):
@@ -197,12 +191,15 @@ def gen_from_config(config, target_arch):
         }}
         """)  # noqa
 
-    feature_flags = []
     xsimd_archs = ""
+    includes_fma3 = False
     for arch in ARCHITECTURES:
         xsimd_archs += f"xs::{arch}, "
-        flag = f"-m{_parse_arch_flag(arch)}"
-        feature_flags.append(flag)
+        # Guard against repeated fma3 flags
+        if "fma3" in arch:
+            if includes_fma3:
+                continue
+            includes_fma3 = True
     xsimd_archs = xsimd_archs[:-2]
 
     optim_file = dedent(f"""\
@@ -218,10 +215,10 @@ def gen_from_config(config, target_arch):
     def _write_arch_specialization(metric, arch, signature_template, additional_args):
         file_path = join(GENERATED_DIR, f"{metric}_{arch}.cpp")
         arch_specialized_template = """#include "{0}.hpp"\n"""
-        for _type in ("float", "double"):
+        for c_type in ("float", "double"):
             signature = (
                 signature_template.format(metric, additional_args, arch)
-                .replace("Type", _type)
+                .replace("Type", c_type)
                 .replace("{", ";")
             )
             arch_specialized_template += signature
@@ -230,8 +227,8 @@ def gen_from_config(config, target_arch):
         return "extern " + signature
 
     def _specialize_file_content(metric, spec):
-        setup_func = lambda n: _make_parseable(spec["SETUP_UNROLL"]).format(n)
-        body_func = lambda n: _make_parseable(spec["BODY"]).format(n)
+        setup_func = lambda n: _make_formattable(spec["SETUP_UNROLL"]).format(n)
+        body_func = lambda n: _make_formattable(spec["BODY"]).format(n)
         additional_args = ", " + spec["ARGS"] if spec["ARGS"] else ""
         file_content = FILE_TEMPLATE.format(
             metric,
@@ -275,14 +272,16 @@ def gen_from_config(config, target_arch):
     with open(file_path, "w") as file:
         file.write(optim_file)
 
-    return feature_flags
+    # Convert from single string to a list of stripped strings for later parsing
+    xsimd_archs = [arch.strip() for arch in xsimd_archs.split(",")]
+    return xsimd_archs
 
 
 def _tab_indent(str):
     return indent(str, PY_TAB)
 
 
-def _make_parseable(raw):
+def _make_formattable(raw):
     return (
         raw.strip()
         .replace("{", "{{")

@@ -9,13 +9,14 @@ import os
 from os.path import join
 import platform
 import shutil
-import glob
+import glob  # noqa
 
 from setuptools import Command, Extension, setup
 from setuptools.command.build_ext import build_ext as _build_ext
+
 from sklearn._build_utils import _check_cython_version  # noqa
 from sklearn.externals._packaging.version import parse as parse_version  # noqa
-from slsdm._generate import generate_code, GENERATED_DIR
+from slsdm._generate import generate_code, GENERATED_DIR  # noqa
 import traceback
 import importlib
 from collections import defaultdict
@@ -31,7 +32,7 @@ with open("README.md") as f:
 MAINTAINER = "Meekail Zain"
 MAINTAINER_EMAIL = "zainmeekail@gmail.com"
 LICENSE = "new BSD"
-FEATURE_FLAGS = ""
+XSIMD_ARCHS = None
 
 PYTEST_MIN_VERSION = "5.4.3"
 CYTHON_MIN_VERSION = "0.29.33"
@@ -158,29 +159,126 @@ def check_package_status(package, min_version):
             raise ImportError("{} is not installed.\n{}".format(package, req_str))
 
 
+def _parse_xsimd_to_arch(arch):
+    arch = arch[4:]
+    out = ""
+    if "fma3" in arch:
+        out = "fma3_"
+        arch = arch[9:-1]
+    out += arch
+    return out
+
+
+def _parse_arch_to_flag(arch, compiler="gcc"):
+    flags = []
+    if compiler == "gcc":
+        if "fma3" in arch:
+            flags.append("-mfma3")
+            flags.append("-m" + arch[5:].replace("_", "."))
+        else:
+            flags.append("-m" + arch.replace("_", "."))
+    else:
+        raise ValueError("Only gcc is currently supported.")
+    return flags
+
+
+def _make_library_config(xsimd_archs):
+    libraries = []
+    for arch in xsimd_archs:
+        arch = _parse_xsimd_to_arch(arch)
+        flags = _parse_arch_to_flag(arch)
+        libraries.append(
+            (
+                arch,
+                {
+                    "language": "c++",
+                    "sources": [f"slsdm/src/_src/{arch}.cpp"],
+                    "depends": [
+                        "slsdm/src/_src/euclidean.hpp",
+                        "slsdm/src/_src/chebyshev.hpp",
+                    ],
+                    "cflags": ["-std=c++14", *flags],
+                    "extra_link_args": ["-std=c++14"],
+                    "include_dirs": ["slsdm/src/", "xsimd/include/"],
+                },
+            )
+        )
+    print(f"DEBUG *** LIBRARIES~=\n{[arch for arch, _ in libraries]}")
+    return libraries
+
+
+_libraries = [
+    (
+        "sse2",
+        {
+            "language": "c++",
+            "sources": ["slsdm/src/_src/sse2.cpp"],
+            "depends": ["slsdm/src/_src/euclidean.hpp", "slsdm/src/_src/chebyshev.hpp"],
+            "cflags": ["-std=c++14", "-msse2"],
+            "extra_link_args": ["-std=c++14"],
+            "include_dirs": ["slsdm/src/", "xsimd/include/"],
+        },
+    ),
+    (
+        "sse3",
+        {
+            "language": "c++",
+            "sources": ["slsdm/src/_src/sse3.cpp"],
+            "depends": ["slsdm/src/_src/euclidean.hpp", "slsdm/src/_src/chebyshev.hpp"],
+            "cflags": ["-std=c++14", "-msse3"],
+            "extra_link_args": ["-std=c++14"],
+            "include_dirs": ["slsdm/src/", "xsimd/include/"],
+        },
+    ),
+    (
+        "avx",
+        {
+            "language": "c++",
+            "sources": ["slsdm/src/_src/avx.cpp"],
+            "depends": ["slsdm/src/_src/euclidean.hpp", "slsdm/src/_src/chebyshev.hpp"],
+            "cflags": ["-std=c++14", "-mavx"],
+            "extra_link_args": ["-std=c++14"],
+            "include_dirs": ["slsdm/src/", "xsimd/include/"],
+        },
+    ),
+    (
+        "avx512f",
+        {
+            "language": "c++",
+            "sources": ["slsdm/src/_src/avx512f.cpp"],
+            "depends": ["slsdm/src/_src/euclidean.hpp", "slsdm/src/_src/chebyshev.hpp"],
+            "cflags": ["-std=c++14", "-mavx512f"],
+            "extra_link_args": ["-std=c++14"],
+            "include_dirs": ["slsdm/src/", "xsimd/include/"],
+        },
+    ),
+]
+
+
 def build_extension_config():
     # TODO: Filter to only delete unsupported architectures and files that have
     # had their corresponding *.def files altered.
-    if os.path.exists(GENERATED_DIR):
-        shutil.rmtree(GENERATED_DIR)
+    # if os.path.exists(GENERATED_DIR):
+    #     shutil.rmtree(GENERATED_DIR)
 
     # TODO: Filter to only generate files that are either missing or have had
     # their corresponding *.def files altered.
     # Generate simd compilation targets from *.def files
     target_arch = os.environ.get("SLSDM_SIMD_ARCH", "<=avx")
-    global FEATURE_FLAGS
-    FEATURE_FLAGS = generate_code(target_arch)
-    srcs = ["_dist_metrics.pyx.tp", "_dist_metrics.pxd"]
-    srcs += [
-        "/".join(GENERATED_DIR.split("/")[1:]) + os.path.basename(p)
-        for p in glob.glob(join(GENERATED_DIR, "*.cpp"))
-    ]
+    global XSIMD_ARCHS
+    XSIMD_ARCHS = generate_code(target_arch)
+    srcs = ["test.pyx", "src/_src/_dist_optim.cpp"]
+    # srcs += [
+    #     "/".join(GENERATED_DIR.split("/")[1:]) + os.path.basename(p)
+    #     for p in glob.glob(join(GENERATED_DIR, "*.cpp"))
+    # ]
     extension_config = {
         SRC_NAME: [
             {
                 "sources": srcs,
                 "language": "c++",
                 "include_dirs": ["src/", "../xsimd/include/"],
+                "library_dirs": ["src/_src"],
                 "extra_compile_args": ["-std=c++14"],
                 "extra_link_args": ["-std=c++14"],
             },
@@ -240,7 +338,7 @@ def configure_extension_modules():
 
     is_pypy = platform.python_implementation() == "PyPy"
     np_include = numpy.get_include()
-    default_optimization_level = "O3"
+    default_optimization_level = "O1"
 
     if os.name == "posix":
         default_libraries = ["m"]
@@ -265,7 +363,6 @@ def configure_extension_modules():
 
     cython_exts = []
     extension_config = build_extension_config()
-    default_extra_compile_args.extend(FEATURE_FLAGS)
     for submodule, extensions in extension_config.items():
         submodule_parts = submodule.split(".")
         parent_dir = join(*submodule_parts)
@@ -327,7 +424,7 @@ def configure_extension_modules():
                 extra_compile_args.append(f"/{optimization_level}")
 
             libraries_ext = extension.get("libraries", []) + default_libraries
-
+            print(f"DEBUG *** {libraries_ext=}")
             new_ext = Extension(
                 name=name,
                 sources=sources,
@@ -401,6 +498,7 @@ def setup_package():
 
         _check_cython_version()
         metadata["ext_modules"] = configure_extension_modules()
+        metadata["libraries"] = _make_library_config(XSIMD_ARCHS)
     setup(**metadata)
 
 
