@@ -177,7 +177,7 @@ def _parse_arch_to_flag(arch, compiler="gcc"):
     flags = []
     if compiler == "gcc":
         if "fma3" in arch:
-            flags.append("-mfma3")
+            flags.append("-mfma")
             arch = arch[5:]
         arch = arch.replace("_", ".")
         for flag in (arch, *REQUIRED_FLAGS[arch]):
