@@ -27,12 +27,6 @@ _x86 = [
 ]
 
 
-def _parse_arch_flag(arch):
-    if "fma3" in arch:
-        return "fma"
-    return arch.replace("_", ".")
-
-
 def _get_arch_id(target_arch):
     try:
         target_arch_idx = _x86.index(target_arch)
@@ -86,6 +80,16 @@ def _make_architectures(target_archs):
                 cur_archs.append(f"fma3<xs::{fma_compatible_arch}>")
 
     return cur_archs
+
+
+def _parse_xsimd_to_arch(arch):
+    arch = arch[4:]
+    out = ""
+    if "fma3" in arch:
+        out = "fma3_"
+        arch = arch[9:-1]
+    out += arch
+    return out
 
 
 def _pprint_config(config):
@@ -197,12 +201,15 @@ def gen_from_config(config, target_arch):
         }}
         """)  # noqa
 
-    feature_flags = []
     xsimd_archs = ""
+    includes_fma3 = False
     for arch in ARCHITECTURES:
         xsimd_archs += f"xs::{arch}, "
-        flag = f"-m{_parse_arch_flag(arch)}"
-        feature_flags.append(flag)
+        # Guard against repeated fma3 flags
+        if "fma3" in arch:
+            if includes_fma3:
+                continue
+            includes_fma3 = True
     xsimd_archs = xsimd_archs[:-2]
 
     optim_file = dedent(f"""\
@@ -216,22 +223,24 @@ def gen_from_config(config, target_arch):
         """)
 
     def _write_arch_specialization(metric, arch, signature_template, additional_args):
-        file_path = join(GENERATED_DIR, f"{metric}_{arch}.cpp")
+        file_path = join(GENERATED_DIR, f"{arch}.cpp")
         arch_specialized_template = """#include "{0}.hpp"\n"""
-        for _type in ("float", "double"):
+        out = ""
+        for c_type in ("float", "double"):
             signature = (
                 signature_template.format(metric, additional_args, arch)
-                .replace("Type", _type)
+                .replace("Type", c_type)
                 .replace("{", ";")
             )
             arch_specialized_template += signature
-        with open(file_path, "w") as file:
-            file.write(arch_specialized_template.format(metric))
-        return "extern " + signature
+            out += "extern " + signature
+        with open(file_path, "a") as file:
+            file.write(arch_specialized_template.format(metric) + "\n")
+        return out + "\n"
 
     def _specialize_file_content(metric, spec):
-        setup_func = lambda n: _make_parseable(spec["SETUP_UNROLL"]).format(n)
-        body_func = lambda n: _make_parseable(spec["BODY"]).format(n)
+        setup_func = lambda n: _make_formattable(spec["SETUP_UNROLL"]).format(n)
+        body_func = lambda n: _make_formattable(spec["BODY"]).format(n)
         additional_args = ", " + spec["ARGS"] if spec["ARGS"] else ""
         file_content = FILE_TEMPLATE.format(
             metric,
@@ -275,14 +284,17 @@ def gen_from_config(config, target_arch):
     with open(file_path, "w") as file:
         file.write(optim_file)
 
-    return feature_flags
+    # Convert from single string to a list of stripped strings for later parsing
+    xsimd_archs = [arch.strip() for arch in xsimd_archs.split(",")]
+    metrics = [item[0] for item in config.items()]
+    return metrics, xsimd_archs
 
 
 def _tab_indent(str):
     return indent(str, PY_TAB)
 
 
-def _make_parseable(raw):
+def _make_formattable(raw):
     return (
         raw.strip()
         .replace("{", "{{")

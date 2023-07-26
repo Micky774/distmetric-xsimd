@@ -9,13 +9,13 @@ import os
 from os.path import join
 import platform
 import shutil
-import glob
 
 from setuptools import Command, Extension, setup
 from setuptools.command.build_ext import build_ext as _build_ext
+
 from sklearn._build_utils import _check_cython_version  # noqa
 from sklearn.externals._packaging.version import parse as parse_version  # noqa
-from slsdm._generate import generate_code, GENERATED_DIR
+from slsdm._generate import generate_code, GENERATED_DIR, _parse_xsimd_to_arch
 import traceback
 import importlib
 from collections import defaultdict
@@ -31,7 +31,8 @@ with open("README.md") as f:
 MAINTAINER = "Meekail Zain"
 MAINTAINER_EMAIL = "zainmeekail@gmail.com"
 LICENSE = "new BSD"
-FEATURE_FLAGS = ""
+XSIMD_ARCHS = None
+METRICS = None
 
 PYTEST_MIN_VERSION = "5.4.3"
 CYTHON_MIN_VERSION = "0.29.33"
@@ -158,6 +159,57 @@ def check_package_status(package, min_version):
             raise ImportError("{} is not installed.\n{}".format(package, req_str))
 
 
+def _parse_arch_to_flag(arch, compiler="gcc"):
+    REQUIRED_FLAGS = {
+        "avx512bw": ["avx512f", "avx512cd", "avx512dq"],
+        "avx512dq": ["avx512f", "avx512cd"],
+        "avx512cd": ["avx512f"],
+        "avx512f": [],
+        "fma4": [],
+        "avx2": [],
+        "avx": [],
+        "sse4.2": [],
+        "sse4.1": [],
+        "ssse3": [],
+        "sse3": [],
+        "sse2": [],
+    }
+    flags = []
+    if compiler == "gcc":
+        if "fma3" in arch:
+            flags.append("-mfma3")
+            arch = arch[5:]
+        arch = arch.replace("_", ".")
+        for flag in (arch, *REQUIRED_FLAGS[arch]):
+            flags.append("-m" + flag)
+    else:
+        raise ValueError("Only gcc is currently supported.")
+    return flags
+
+
+def _make_library_config(metrics, xsimd_archs):
+    libraries = []
+    for arch in xsimd_archs:
+        arch = _parse_xsimd_to_arch(arch)
+        flags = _parse_arch_to_flag(arch)
+        libraries.append(
+            (
+                arch,
+                {
+                    "language": "c++",
+                    "sources": [f"{join(GENERATED_DIR, arch)}.cpp"],
+                    "depends": [
+                        join(GENERATED_DIR, f"{metric}.hpp") for metric in metrics
+                    ],
+                    "cflags": ["-std=c++14", *flags],
+                    "extra_link_args": ["-std=c++14"],
+                    "include_dirs": ["slsdm/src/", "xsimd/include/"],
+                },
+            )
+        )
+    return libraries
+
+
 def build_extension_config():
     # TODO: Filter to only delete unsupported architectures and files that have
     # had their corresponding *.def files altered.
@@ -168,12 +220,11 @@ def build_extension_config():
     # their corresponding *.def files altered.
     # Generate simd compilation targets from *.def files
     target_arch = os.environ.get("SLSDM_SIMD_ARCH", "<=avx")
-    global FEATURE_FLAGS
-    FEATURE_FLAGS = generate_code(target_arch)
-    srcs = ["_dist_metrics.pyx.tp", "_dist_metrics.pxd"]
-    srcs += [
-        "/".join(GENERATED_DIR.split("/")[1:]) + os.path.basename(p)
-        for p in glob.glob(join(GENERATED_DIR, "*.cpp"))
+    metrics, xsimd_archs = generate_code(target_arch)
+    srcs = [
+        "_dist_metrics.pyx.tp",
+        "_dist_metrics.pxd",
+        join(GENERATED_DIR[6:], "_dist_optim.cpp"),
     ]
     extension_config = {
         SRC_NAME: [
@@ -186,7 +237,7 @@ def build_extension_config():
             },
         ],
     }
-    return extension_config
+    return extension_config, metrics, xsimd_archs
 
 
 def cythonize_extensions(extension):
@@ -264,8 +315,7 @@ def configure_extension_modules():
             default_extra_compile_args.append("-g0")
 
     cython_exts = []
-    extension_config = build_extension_config()
-    default_extra_compile_args.extend(FEATURE_FLAGS)
+    extension_config, metrics, xsimd_archs = build_extension_config()
     for submodule, extensions in extension_config.items():
         submodule_parts = submodule.split(".")
         parent_dir = join(*submodule_parts)
@@ -327,7 +377,6 @@ def configure_extension_modules():
                 extra_compile_args.append(f"/{optimization_level}")
 
             libraries_ext = extension.get("libraries", []) + default_libraries
-
             new_ext = Extension(
                 name=name,
                 sources=sources,
@@ -340,7 +389,7 @@ def configure_extension_modules():
             )
             new_ext.define_macros.append(DEFINE_MACRO_NUMPY_C_API)
             cython_exts.append(new_ext)
-    return cythonize_extensions(cython_exts)
+    return cythonize_extensions(cython_exts), metrics, xsimd_archs
 
 
 def setup_package():
@@ -400,7 +449,8 @@ def setup_package():
         check_package_status("sklearn", SKLEARN_MIN_VERSION)
 
         _check_cython_version()
-        metadata["ext_modules"] = configure_extension_modules()
+        metadata["ext_modules"], metrics, xsimd_archs = configure_extension_modules()
+        metadata["libraries"] = _make_library_config(metrics, xsimd_archs)
     setup(**metadata)
 
 
