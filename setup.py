@@ -16,7 +16,7 @@ from setuptools.command.build_ext import build_ext as _build_ext
 
 from sklearn._build_utils import _check_cython_version  # noqa
 from sklearn.externals._packaging.version import parse as parse_version  # noqa
-from slsdm._generate import generate_code, GENERATED_DIR  # noqa
+from slsdm._generate import generate_code, GENERATED_DIR, _parse_xsimd_to_arch
 import traceback
 import importlib
 from collections import defaultdict
@@ -33,6 +33,7 @@ MAINTAINER = "Meekail Zain"
 MAINTAINER_EMAIL = "zainmeekail@gmail.com"
 LICENSE = "new BSD"
 XSIMD_ARCHS = None
+METRICS = None
 
 PYTEST_MIN_VERSION = "5.4.3"
 CYTHON_MIN_VERSION = "0.29.33"
@@ -159,24 +160,32 @@ def check_package_status(package, min_version):
             raise ImportError("{} is not installed.\n{}".format(package, req_str))
 
 
-def _parse_xsimd_to_arch(arch):
-    arch = arch[4:]
-    out = ""
-    if "fma3" in arch:
-        out = "fma3_"
-        arch = arch[9:-1]
-    out += arch
-    return out
-
-
 def _parse_arch_to_flag(arch, compiler="gcc"):
+    REQUIRED_FLAGS = {
+        "avx512bw": ["avx512f", "avx512cd", "avx512dq"],
+        "avx512dq": ["avx512f", "avx512cd"],
+        "avx512cd": ["avx512f"],
+        "avx512f": [],
+        "fma4": [],
+        "avx2": [],
+        "avx": [],
+        "sse4.2": [],
+        "sse4.1": [],
+        "ssse3": [],
+        "sse3": [],
+        "sse2": [],
+    }
     flags = []
     if compiler == "gcc":
         if "fma3" in arch:
             flags.append("-mfma3")
-            flags.append("-m" + arch[5:].replace("_", "."))
+            arch = arch[5:].replace("_", ".")
+            for flag in (arch, *REQUIRED_FLAGS[arch]):
+                flags.append("-m" + flag)
         else:
-            flags.append("-m" + arch.replace("_", "."))
+            arch = arch.replace("_", ".")
+            for flag in (arch, *REQUIRED_FLAGS[arch]):
+                flags.append("-m" + flag)
     else:
         raise ValueError("Only gcc is currently supported.")
     return flags
@@ -192,10 +201,9 @@ def _make_library_config(xsimd_archs):
                 arch,
                 {
                     "language": "c++",
-                    "sources": [f"slsdm/src/_src/{arch}.cpp"],
+                    "sources": [f"{join(GENERATED_DIR, arch)}.cpp"],
                     "depends": [
-                        "slsdm/src/_src/euclidean.hpp",
-                        "slsdm/src/_src/chebyshev.hpp",
+                        join(GENERATED_DIR, f"{metric}.hpp") for metric in METRICS
                     ],
                     "cflags": ["-std=c++14", *flags],
                     "extra_link_args": ["-std=c++14"],
@@ -203,71 +211,27 @@ def _make_library_config(xsimd_archs):
                 },
             )
         )
-    print(f"DEBUG *** LIBRARIES~=\n{[arch for arch, _ in libraries]}")
     return libraries
-
-
-_libraries = [
-    (
-        "sse2",
-        {
-            "language": "c++",
-            "sources": ["slsdm/src/_src/sse2.cpp"],
-            "depends": ["slsdm/src/_src/euclidean.hpp", "slsdm/src/_src/chebyshev.hpp"],
-            "cflags": ["-std=c++14", "-msse2"],
-            "extra_link_args": ["-std=c++14"],
-            "include_dirs": ["slsdm/src/", "xsimd/include/"],
-        },
-    ),
-    (
-        "sse3",
-        {
-            "language": "c++",
-            "sources": ["slsdm/src/_src/sse3.cpp"],
-            "depends": ["slsdm/src/_src/euclidean.hpp", "slsdm/src/_src/chebyshev.hpp"],
-            "cflags": ["-std=c++14", "-msse3"],
-            "extra_link_args": ["-std=c++14"],
-            "include_dirs": ["slsdm/src/", "xsimd/include/"],
-        },
-    ),
-    (
-        "avx",
-        {
-            "language": "c++",
-            "sources": ["slsdm/src/_src/avx.cpp"],
-            "depends": ["slsdm/src/_src/euclidean.hpp", "slsdm/src/_src/chebyshev.hpp"],
-            "cflags": ["-std=c++14", "-mavx"],
-            "extra_link_args": ["-std=c++14"],
-            "include_dirs": ["slsdm/src/", "xsimd/include/"],
-        },
-    ),
-    (
-        "avx512f",
-        {
-            "language": "c++",
-            "sources": ["slsdm/src/_src/avx512f.cpp"],
-            "depends": ["slsdm/src/_src/euclidean.hpp", "slsdm/src/_src/chebyshev.hpp"],
-            "cflags": ["-std=c++14", "-mavx512f"],
-            "extra_link_args": ["-std=c++14"],
-            "include_dirs": ["slsdm/src/", "xsimd/include/"],
-        },
-    ),
-]
 
 
 def build_extension_config():
     # TODO: Filter to only delete unsupported architectures and files that have
     # had their corresponding *.def files altered.
-    # if os.path.exists(GENERATED_DIR):
-    #     shutil.rmtree(GENERATED_DIR)
+    if os.path.exists(GENERATED_DIR):
+        shutil.rmtree(GENERATED_DIR)
 
     # TODO: Filter to only generate files that are either missing or have had
     # their corresponding *.def files altered.
     # Generate simd compilation targets from *.def files
     target_arch = os.environ.get("SLSDM_SIMD_ARCH", "<=avx")
     global XSIMD_ARCHS
-    XSIMD_ARCHS = generate_code(target_arch)
-    srcs = ["test.pyx", "src/_src/_dist_optim.cpp"]
+    global METRICS
+    METRICS, XSIMD_ARCHS = generate_code(target_arch)
+    srcs = [
+        "_dist_metrics.pyx.tp",
+        "_dist_metrics.pxd",
+        join(GENERATED_DIR[6:], "_dist_optim.cpp"),
+    ]
     # srcs += [
     #     "/".join(GENERATED_DIR.split("/")[1:]) + os.path.basename(p)
     #     for p in glob.glob(join(GENERATED_DIR, "*.cpp"))
@@ -278,7 +242,6 @@ def build_extension_config():
                 "sources": srcs,
                 "language": "c++",
                 "include_dirs": ["src/", "../xsimd/include/"],
-                "library_dirs": ["src/_src"],
                 "extra_compile_args": ["-std=c++14"],
                 "extra_link_args": ["-std=c++14"],
             },
@@ -424,7 +387,6 @@ def configure_extension_modules():
                 extra_compile_args.append(f"/{optimization_level}")
 
             libraries_ext = extension.get("libraries", []) + default_libraries
-            print(f"DEBUG *** {libraries_ext=}")
             new_ext = Extension(
                 name=name,
                 sources=sources,

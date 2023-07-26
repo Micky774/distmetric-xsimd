@@ -5,7 +5,7 @@ from pathlib import Path
 import io
 
 PY_TAB = "    "
-GENERATED_DIR = "slsdm/src/_src/generated/"
+GENERATED_DIR = "slsdm/src/generated/"
 DEFINITIONS_DIR = "slsdm/definitions/"
 VECTOR_UNROLL_FACTOR = 4
 
@@ -80,6 +80,16 @@ def _make_architectures(target_archs):
                 cur_archs.append(f"fma3<xs::{fma_compatible_arch}>")
 
     return cur_archs
+
+
+def _parse_xsimd_to_arch(arch):
+    arch = arch[4:]
+    out = ""
+    if "fma3" in arch:
+        out = "fma3_"
+        arch = arch[9:-1]
+    out += arch
+    return out
 
 
 def _pprint_config(config):
@@ -213,8 +223,9 @@ def gen_from_config(config, target_arch):
         """)
 
     def _write_arch_specialization(metric, arch, signature_template, additional_args):
-        file_path = join(GENERATED_DIR, f"{metric}_{arch}.cpp")
+        file_path = join(GENERATED_DIR, f"{arch}.cpp")
         arch_specialized_template = """#include "{0}.hpp"\n"""
+        out = ""
         for c_type in ("float", "double"):
             signature = (
                 signature_template.format(metric, additional_args, arch)
@@ -222,9 +233,10 @@ def gen_from_config(config, target_arch):
                 .replace("{", ";")
             )
             arch_specialized_template += signature
-        with open(file_path, "w") as file:
-            file.write(arch_specialized_template.format(metric))
-        return "extern " + signature
+            out += "extern " + signature
+        with open(file_path, "a") as file:
+            file.write(arch_specialized_template.format(metric) + "\n")
+        return out + "\n"
 
     def _specialize_file_content(metric, spec):
         setup_func = lambda n: _make_formattable(spec["SETUP_UNROLL"]).format(n)
@@ -274,7 +286,8 @@ def gen_from_config(config, target_arch):
 
     # Convert from single string to a list of stripped strings for later parsing
     xsimd_archs = [arch.strip() for arch in xsimd_archs.split(",")]
-    return xsimd_archs
+    metrics = [item[0] for item in config.items()]
+    return metrics, xsimd_archs
 
 
 def _tab_indent(str):
