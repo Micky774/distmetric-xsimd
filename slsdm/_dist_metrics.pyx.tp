@@ -37,9 +37,6 @@ from sklearn.utils.fixes import parse_version, sp_base_version
 cdef inline double fmax(double a, double b) noexcept nogil:
     return max(a, b)
 
-cpdef get_best_arch():
-    _get_best_arch()
-
 {{for name_suffix, INPUT_DTYPE_t, INPUT_DTYPE in implementation_specific_values}}
 from sklearn.metrics._dist_metrics cimport DistanceMetric{{name_suffix}}
 
