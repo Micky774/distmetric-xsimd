@@ -34,7 +34,7 @@ SSE3            |     sse3
 SSE2            |     sse2
 ```
 
-For example, to build for `{SSE3, AVX, FMA 3 + AVX, AVX2}` one would specify `SLSDM_SIMD_ARCH="sse3, avx, fma3<xs::avx>, avx2"`.
+For example, to build for `{SSE3, AVX, FMA 3 + AVX, AVX2}` one would specify `SLSDM_SIMD_ARCH="sse3, avx, fma3, avx2"`.
 
 You may also prefer to specify features *up to*, and optionally including, a certain instruction. For that, you may prepend a specification token with `<` (exclusive) or `<=` (inclusive). For example, to build for `{SSE2, SSE3, SSSE3, AVX2}` one would specify `SLSDM_SIMD_ARCH="<=ssse3, avx2"`.
 
