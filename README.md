@@ -5,7 +5,7 @@ Run `pip install slsdm`. Note that the premade wheels are only built with suppor
 
 ## Install From Source:
 
-1. Create a new environment with `xsimd`: `conda create -n <env_name> -c conda-forge python~=3.10.0 compilers`
+1. Create a new environment with `conda create -n <env_name> -c conda-forge python~=3.10.0 compilers`
 2. Activate the environment: `conda activate <env_name>`
 3. Run `pip install -e .`
 
