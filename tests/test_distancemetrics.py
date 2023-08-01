@@ -1,5 +1,5 @@
 from slsdm import get_distance_metric
-from sklearn.metrics._dist_metrics import DistanceMetric, DistanceMetric32
+from sklearn.metrics._dist_metrics import DistanceMetric
 import numpy as np
 from numpy.testing import assert_allclose
 import pytest
@@ -15,10 +15,6 @@ IMPLEMENTED_METRICS = (
     "p",
     "seuclidean",
 )
-DISTANCE_METRIC_SK = {
-    "64": DistanceMetric,
-    "32": DistanceMetric32,
-}
 
 
 @pytest.mark.parametrize("metric", IMPLEMENTED_METRICS)
@@ -35,8 +31,8 @@ def test_metric_matches(metric, bit_width):
     data_dtype = np.float32 if bit_width == "32" else np.float64
     X = rng.random(size=(n_samples, n_features), dtype=data_dtype)
 
-    dst = get_distance_metric(X, metric, **metric_kwargs)
-    dst_sk = DISTANCE_METRIC_SK[bit_width].get_metric(metric, **metric_kwargs)
+    dst = get_distance_metric(metric, dtype=X.dtype, **metric_kwargs)
+    dst_sk = DistanceMetric.get_metric(metric, **metric_kwargs)
     print(dst_sk)
 
     pairs = dst.pairwise(X)

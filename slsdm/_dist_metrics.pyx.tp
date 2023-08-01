@@ -644,8 +644,8 @@ cdef class MinkowskiDistance{{name_suffix}}(DistanceMetric{{name_suffix}}):
         )
 {{endfor}}
 
-def get_distance_metric(x, metric, **kwargs):
-    MAPPING = METRIC_MAPPING64 if x.dtype == np.float64 else METRIC_MAPPING32
+def get_distance_metric(metric, dtype, **kwargs):
+    MAPPING = METRIC_MAPPING64 if dtype == np.float64 else METRIC_MAPPING32
     # Map the metric string ID to the metric class
     try:
         metric = MAPPING[metric]

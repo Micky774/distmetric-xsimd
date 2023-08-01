@@ -1,9 +1,9 @@
-def get_distance_metric(X, metric, **metric_kwargs):
+def get_distance_metric(metric, dtype, **metric_kwargs):
     # A bit of a hack to allow for partial import during build
     try:
         from ._dist_metrics import get_distance_metric
 
-        return get_distance_metric(X, metric, **metric_kwargs)
+        return get_distance_metric(metric, dtype, **metric_kwargs)
     except ModuleNotFoundError:
         return None
 
