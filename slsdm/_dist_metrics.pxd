@@ -7,3 +7,18 @@ cdef extern from "src/generated/_dist_optim.cpp":
     cdef Type xsimd_chebyshev_dist[Type](Type * x, Type * y, intp_t size) nogil
     cdef Type xsimd_minkowski_rdist[Type](Type * x, Type * y, intp_t size, const double p) nogil
     cdef Type xsimd_minkowski_w_rdist[Type](Type * x, Type * y, intp_t size, const Type * w, const double p) nogil
+
+cdef extern from *:
+    """
+    #include "xsimd/xsimd.hpp"
+
+    bool _avx_available(){
+        return xsimd::avx::available();
+    }
+
+    bool _avx512f_available(){
+        return xsimd::avx512f::available();
+    }
+    """
+    cdef bint _avx_available() nogil
+    cdef bint _avx512f_available() nogil

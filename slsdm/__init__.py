@@ -8,7 +8,24 @@ def get_distance_metric(metric, dtype, **metric_kwargs):
         return None
 
 
+def avx_available():
+    try:
+        from ._dist_metrics import avx_available
+
+        return avx_available()
+    except ModuleNotFoundError:
+        return None
+
+
+def avx512f_available():
+    try:
+        from ._dist_metrics import avx512f_available
+
+        return avx512f_available()
+    except ModuleNotFoundError:
+        return None
+
+
 __version__ = "0.2.dev0"
 
-
-__all__ = ["get_distance_metric"]
+__all__ = ["get_distance_metric", "avx_available", "avx512f_available"]
