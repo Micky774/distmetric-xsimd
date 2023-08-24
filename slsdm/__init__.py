@@ -26,6 +26,20 @@ def avx512f_available():
         return None
 
 
+def get_available_architectures():
+    try:
+        from ._dist_metrics import get_available_architectures
+
+        return get_available_architectures()
+    except ModuleNotFoundError:
+        return None
+
+
 __version__ = "0.2.dev0"
 
-__all__ = ["get_distance_metric", "avx_available", "avx512f_available"]
+__all__ = [
+    "get_distance_metric",
+    "avx_available",
+    "avx512f_available",
+    "get_available_architectures",
+]

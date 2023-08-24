@@ -43,6 +43,9 @@ cpdef bint avx_available():
 cpdef bint avx512f_available():
     return _avx512f_available()
 
+cpdef get_available_architectures():
+    return available_architectures()
+
 {{for name_suffix, INPUT_DTYPE_t, INPUT_DTYPE in implementation_specific_values}}
 from sklearn.metrics._dist_metrics cimport DistanceMetric{{name_suffix}}
 
